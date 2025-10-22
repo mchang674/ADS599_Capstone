@@ -13,6 +13,12 @@ https://resources.github.com/github-and-rstudio/
 https://api.census.gov/data/key_signup.html
 
 
+Current brainstorming ideas
+- pulling in 5-10 variables from ACS data to create a list of estimates for % of population that is disabled with certain characteristics. Data can be used to train a machine learning model that predicts median income
+- studying the economic impacts of disability (median income by disability status, insurance by disability status, working status by difficulties)
+- impacts of disability with other predictors (age, sex, race...)
+
+
 ## Calling in libraries
 
 ```{r setup, include=FALSE}
@@ -182,13 +188,13 @@ perc_data %>%
   filter(dis_status == 'disabled') %>%
 ggplot() +
   geom_histogram(aes(x = percent_of_pop, fill = labor), bins = 75, position = "identity", alpha = 0.5) +
-  facet_wrap(~poverty)
+  facet_wrap(~poverty, scales = "free_x")
 
 perc_data %>%
   filter(dis_status == 'not_dis') %>%
 ggplot() +
   geom_histogram(aes(x = percent_of_pop, fill = labor), bins = 75, position = "identity", alpha = 0.5) +
-  facet_wrap(~poverty)
+  facet_wrap(~poverty, scales = "free_x")
 
 ```
 
