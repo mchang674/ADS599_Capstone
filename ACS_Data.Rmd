@@ -41,236 +41,86 @@ library(tidycensus)
 ## Finding available measures centered around disability status
 
 ```{r}
-var<- load_variables(2023, "acs1", cache = TRUE)
+var<- load_variables(2023, "acs5", cache = TRUE)
 var<- var %>%
   mutate(dis = str_detect(concept, 'Disability'),
-         dis2 = str_detect(label, 'disability'))
+         dis2 = str_detect(label, 'disability'),
+         edu = str_detect(concept, 'Education'),
+         edu2 = str_detect(label, 'education'))
 
-dis<- var %>%
-  filter(dis2 == TRUE)
-
-dis %>%
+var %>%
+  filter(edu2 == TRUE | edu == TRUE) %>%  
   group_by(concept) %>%
-  summarise(count = n())
+  summarise(count = n()) %>%
+  print(n = 45)
 ```
 
+----------------------
+
 ```{r}
-split<- dis %>%
+variables<- var %>%
+  filter(substr(name, 1, 6) == 'B17003' | substr(name, 1, 6) == 'B23006' | substr(name, 1, 6) == 'B23024' | substr(name, 1, 6) == 'C18120') %>%
   mutate(label = str_remove(label, 'Estimate!!Total:!!')) %>%
   separate_wider_delim(label, delim = "!!", too_few = "align_start", names_sep = "")
 
-split2<- split %>%
-  mutate(disability = case_when(str_detect(label1, "disability") ~ label1,
-                                str_detect(label2, "disability") ~ label2,
-                                str_detect(label3, "disability") ~ label3,
-                                str_detect(label4, "disability") ~ label4,
-                                str_detect(label5, "disability") ~ label5),
-         age = case_when(str_detect(label1, "(^Under \\d{2} years)|(\\d{2} to \\d{2} years)|(\\d{2} years and over)") ~ label1,
-                                str_detect(label2, "(^Under \\d{2} years)|(\\d{2} to \\d{2} years)|(\\d{2} years and over)") ~ label2,
-                                str_detect(label3, "(^Under \\d{2} years)|(\\d{2} to \\d{2} years)|(\\d{2} years and over)") ~ label3,
-                                str_detect(label4, "(^Under \\d{2} years)|(\\d{2} to \\d{2} years)|(\\d{2} years and over)") ~ label4,
-                                str_detect(label5, "(^Under \\d{2} years)|(\\d{2} to \\d{2} years)|(\\d{2} years and over)") ~ label5),
-          work = case_when(str_detect(label1, "(work)|(Income)|(poverty)|(labor)|(Employ)|(Unemploy)") ~ label1,
-                                str_detect(label2, "(work)|(Income)|(poverty)|(labor)|(Employ)|(Unemploy)") ~ label2,
-                                str_detect(label3, "(work)|(Income)|(poverty)|(labor)|(Employ)|(Unemploy)") ~ label3,
-                                str_detect(label4, "(work)|(Income)|(poverty)|(labor)|(Employ)|(Unemploy)") ~ label4,
-                                str_detect(label5, "(work)|(Income)|(poverty)|(labor)|(Employ)|(Unemploy)") ~ label5),
-          difficulty = case_when(str_detect(label1, "difficulty") ~ label1,
-                                str_detect(label2, "difficulty") ~ label2,
-                                str_detect(label3, "difficulty") ~ label3,
-                                str_detect(label4, "difficulty") ~ label4,
-                                str_detect(label5, "difficulty") ~ label5),
-          sex = case_when(str_detect(label1, "(Male)|(Female)") ~ label1,
-                                str_detect(label2, "(Male)|(Female)") ~ label2,
-                                str_detect(label3, "(Male)|(Female)") ~ label3,
-                                str_detect(label4, "(Male)|(Female)") ~ label4,
-                                str_detect(label5, "(Male)|(Female)") ~ label5),
-          rat_income_pov = case_when(str_detect(label1, "(Under .5)|(.50 to .99)|(1.00 to 1.49)|(1.50 to 1.99)|(2.00 and over)") ~ label1,
-                                str_detect(label2, "(Under .5)|(.50 to .99)|(1.00 to 1.49)|(1.50 to 1.99)|(2.00 and over)") ~ label2,
-                                str_detect(label3, "(Under .5)|(.50 to .99)|(1.00 to 1.49)|(1.50 to 1.99)|(2.00 and over)") ~ label3,
-                                str_detect(label4, "(Under .5)|(.50 to .99)|(1.00 to 1.49)|(1.50 to 1.99)|(2.00 and over)") ~ label4,
-                                str_detect(label5, "(Under .5)|(.50 to .99)|(1.00 to 1.49)|(1.50 to 1.99)|(2.00 and over)") ~ label5)) %>%
-  filter(!str_detect(concept, "Veteran"))
+
+# smallest we can do is tract
+
+educ_pov<- variables %>%
+  filter(!label2 == 'Total:') %>%
+  filter(substr(name, 1, 6) == 'B17003') %>%
+  mutate(label1 = case_when(str_detect(label1, "above") ~ "above_pov",
+                           str_detect(label1, "below") ~ "below_pov"),
+         label2 = case_when(str_detect(label2, "Male")~ "M",
+                            str_detect(label2, "Female") ~ "F"),
+         label3 = case_when(str_detect(label3, "Less than")~ "less_hs",
+                            str_detect(label3, "High school grad")~ "hs",
+                            str_detect(label3, "Some college")~ "some_tert",
+                            str_detect(label3, "or higher")~ "tert_plus")) %>%
+  select(name, label1, label2, label3) %>%
+  drop_na()
 
 
-split3<- split2 %>%
-  mutate(disability = str_remove(disability, ":"),
-         age = str_remove(age, "(Population )|:"),
-         work = str_remove(work, ":"),
-         sex = str_remove(sex, ":"),
-         rat_income_pov = str_remove(rat_income_pov, ":"))
+educ_emp<- variables %>%
+  filter(!label2 == 'Total:') %>%
+  filter(substr(name, 1, 6) == "B23006") %>%
+  mutate(label1 = case_when(str_detect(label1, "Less than")~ "less_hs",
+                            str_detect(label1, "High school grad")~ "hs",
+                            str_detect(label1, "Some college")~ "some_tert",
+                            str_detect(label1, "or higher")~ "tert_plus"),
+         label2 = case_when(str_detect(label2, 'In labor')~ "in_labor",
+                            str_detect(label2, "Not in")~ "not_labor"),
+         label3 = case_when(str_detect(label3, "Armed")~ "arm_force",
+                            str_detect(label3, "Civil") & str_detect(label4, "Employed")~ "civil_emp",
+                            str_detect(label3, "Civil") & str_detect(label4, "Unemployed")~ "civil_un")) %>%
+  select(name, label1, label2, label3) %>% 
+  filter(!is.na(label3) | label2 == "not_labor")
 
-poverty_dis<- split3 %>%
-  filter(substr(name,1, 6) == 'B23024') %>%
-  drop_na(label4)
+variables %>%
+  filter(!label2 == 'Total:') %>%
+  filter(substr(name, 1, 6) == "B23024") %>%
+  mutate(label1 = case_when(str_detect(label1, "above") ~ "above_pov",
+                           str_detect(label1, "below") ~ "below_pov"),
+         label2 = case_when(str_detect(label2, "With a dis")~ "dis",
+                            str_detect(label2, "No dis")~ "no_dis"),
+         label3 = case_when(str_detect(label3, 'In labor')~ "in_labor",
+                            str_detect(label3, "Not in")~ "not_labor"),
+         label4 = case_when(str_detect(label4, "Armed")~ "arm_force",
+                            str_detect(label4, "Civil") & str_detect(label5, "Employed")~ "civil_emp",
+                            str_detect(label4, "Civil") & str_detect(label5, "Unemployed")~ "civil_un")) %>%
+  select(name, label1, label2, label3, label4) %>%
+  filter(!is.na(label4) | label2 == "no_dis" & !is.na(label3))
 
-race<- split3[11:64,]
 
-insurance<- split3 %>%
-  filter(substr(name, 1, 6) == 'B18135')
-
-income_to_pov<- split3 %>%
-  filter(substr(name, 1, 6) == 'B18131') 
-
-work_diff<- split3 %>%
-  filter(substr(name, 1, 6) == 'C18120')
-
+emp_dis<- variables %>%
+  filter(!label2 == 'Total:') %>%
+  filter(substr(name, 1, 6) == "C18120") %>%
+  mutate(label1 = case_when(str_detect(label1, 'In the labor')~ "in_labor",
+                            str_detect(label1, "Not in")~ "not_labor"),
+         label3 = case_when(str_detect(label3, "With a dis") | str_detect(label2, "With a dis")~ "dis",
+                            str_detect(label3, "No dis") | str_detect(label2, "No dis")~ "no_dis"),
+         label2 = case_when(str_detect(label2, "Employed")~ "emp",
+                            str_detect(label2, "Unemp")~ "unemp")) %>%
+  select(name, label1, label2, label3)
 ```
-
-## Example of variable available in both the ACS5 and ACS1
-
-```{r}
-cleaned_pov_dis<- poverty_dis %>%
-  filter(!is.na(label5) | !str_detect(label4, "Civilian")) %>%
-  mutate(poverty = ifelse(str_detect(label1, "above"), "above", "below"),
-         dis_status = ifelse(str_detect(label2, "^With"), 1, 0),
-         label4 = ifelse(str_detect(label4, "Armed"), "armed", "civ"),
-         label5 = ifelse(str_detect(label5, "^Emp"), "emp", "unemp")) %>%
-  mutate(labor = ifelse(is.na(label5), label4, paste0(label4,'_',label5))) %>%
-  select(name, poverty, labor, dis_status)
-```
-
-
-```{r}
-#census_api_key('INSERT CENSUS KEY HERE', install = TRUE)
-
-acs5_pov_dis<- get_acs(geography='county', state = "IL", variables = c(cleaned_pov_dis$name), survey = "acs5", year = 2023, cache = TRUE)
-
-acs1_pov_dis<- get_acs(geography='county', state = "IL", variables = c(cleaned_pov_dis$name), survey = "acs1", year = 2023, cache = TRUE)
-```
-
-```{r}
-data_pov_dis<- acs5_pov_dis %>%
-  inner_join(cleaned_pov_dis, by = join_by(variable == name)) %>%
-  select(GEOID, variable, estimate, moe, poverty, labor, dis_status)
-
-acs5_pov_dis %>%
-  inner_join(cleaned_pov_dis, by = join_by(variable == name)) %>%
-  select(GEOID, variable, estimate, moe, poverty, labor, dis_status)
-
-```
-
-```{r}
-county_size<- data_pov_dis %>%
-  group_by(GEOID) %>%
-  summarise(sum_population = sum(estimate),
-            sum_moe = sum(moe)) %>%
-  mutate(county_size = cut(sum_population, breaks = c(-Inf, 20000, 60000, 200000,Inf),
-                        labels = c("small", "medium", "large", "x_large"))) 
-
-data_pov_dis2<- data_pov_dis %>%
-  inner_join(county_size, by = join_by(GEOID)) 
-```
-
-```{r}
-data_pov_dis2 %>%
-  mutate(dis_status = ifelse(dis_status == 1, "disabled", "not_dis")) %>%
-  select(-variable) %>%
-  pivot_wider(names_from = dis_status, values_from = c(estimate, moe)) %>%
-  mutate(per_dis = estimate_disabled/sum_population) 
-```
-
-```{r}
-data_pov_dis2 %>%
-  mutate(dis_status = ifelse(dis_status == 1, "disabled", "not_dis"),
-         percent_of_pop = estimate/sum_population) %>%
-  filter(percent_of_pop != 0, poverty == 'below', dis_status == 'disabled') %>%
-  ggplot() +
-  geom_boxplot(aes(x = county_size, y = percent_of_pop))
-
-
-perc_data<- data_pov_dis2 %>%
-  mutate(dis_status = ifelse(dis_status == 1, "disabled", "not_dis"),
-         percent_of_pop = estimate/sum_population) %>%
-  filter(percent_of_pop != 0) 
-
-perc_data %>%
-  filter(dis_status == 'disabled') %>%
-ggplot() +
-  geom_histogram(aes(x = percent_of_pop, fill = labor), bins = 75, position = "identity", alpha = 0.5) +
-  facet_wrap(~poverty, scales = "free_x")
-
-perc_data %>%
-  filter(dis_status == 'not_dis') %>%
-ggplot() +
-  geom_histogram(aes(x = percent_of_pop, fill = labor), bins = 75, position = "identity", alpha = 0.5) +
-  facet_wrap(~poverty, scales = "free_x")
-
-```
-
-
-```{r}
-data_pov_dis2 %>%
-  mutate(dis_status = ifelse(dis_status == 1, "disabled", "not_disabled")) %>%
-  filter(pct_in_pov != 0) %>%
-ggplot() +
-  geom_boxplot(aes(x = zip_size, y = pct_in_pov, color = labor)) +
-  facet_wrap(vars(dis_status), scales = "free_y")
-
-
-data_pov_dis2 %>%
-  mutate(dis_status = ifelse(dis_status == 1, "disabled", "not_disabled")) %>%
-ggplot() +
-  geom_boxplot(aes(x = zip_size, y = pct_moe, color = labor)) +
-  facet_wrap(vars(dis_status))
-```
-
-
-
-
-## Example of variable that is not available in the ACS5, but is available in the ACS1.
-
-```{r}
-work_diff<- split3 %>%
-  select(-label4, -label5) %>%
-  filter(substr(name, 1, 6) == 'B18121') %>%
-  mutate(dis_status = ifelse(str_detect(label2, "^With"), 1, 0),
-         work_status = case_when(str_detect(label1, '^Worked') & str_detect(label1, 'less than') ~ 'work_PT',
-                                 str_detect(label1, '^Worked') & str_detect(label1, 'full-time') ~ 'work_FT',
-                                 str_detect(label1, "Did not") ~ 'no_work'),
-         diff = case_when(str_detect(label3, 'hearing') ~ 'hearing',
-                          str_detect(label3, 'vision') ~ 'vision',
-                          str_detect(label3, 'cognitive') ~ 'cognitive',
-                          str_detect(label3, 'ambulatory') ~ 'ambulatory',
-                          str_detect(label3, 'self-care') ~ 'self_care',
-                          str_detect(label3, 'independent') ~ 'ind_living',
-                          is.na(label3) ~ 'none')) %>%
-  select(name, dis_status, work_status, diff)
-```
-
-```{r}
-acs1_work_diff<- get_acs(geography='county', state = "IL", variables = c(work_diff$name), survey = "acs1", year = 2023, cache = TRUE)
-```
-
-```{r}
-acs1_work_diff %>%
-  inner_join(work_diff, by = join_by(variable == name)) %>%
-  select(GEOID, variable,estimate, moe, dis_status, work_status, diff) %>%
-  print(n = 50)
-
-county_size2<- cleaned_work_diff %>%
-  group_by(GEOID) %>%
-  summarise(sum_population = sum(estimate),
-            sum_moe = sum(moe)) %>%
-  mutate(county_size = cut(sum_population, breaks = c(-Inf, 20000, 60000, 200000,Inf),
-                        labels = c("small", "medium", "large", "x_large"))) 
-
-work_diff2<- cleaned_work_diff %>%
-  inner_join(county_size2, by = join_by(GEOID)) 
-
-
-work_diff2 %>%
-  mutate(perc_of_pop = estimate/sum_population,
-         dis_status = ifelse(dis_status == 1, "disabled", "not_disabled")) %>%
-  ggplot() +
-  geom_boxplot(aes(x = work_status, y = perc_of_pop, color = dis_status)) 
-
-work_diff2 %>%
-  mutate(perc_of_pop = estimate/sum_population,
-         dis_status = ifelse(dis_status == 1, "disabled", "not_disabled")) %>%
-  filter(dis_status == 'disabled') %>%
-  ggplot() +
-  geom_boxplot(aes(x = work_status, y = perc_of_pop, color = diff)) 
-```
-
 
