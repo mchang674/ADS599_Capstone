@@ -13,11 +13,6 @@ https://resources.github.com/github-and-rstudio/
 https://api.census.gov/data/key_signup.html
 
 
-Current brainstorming ideas
-- pulling in 5-10 variables from ACS data to create a list of estimates for % of population that is disabled with certain characteristics. Data can be used to train a machine learning model that predicts median income
-- studying the economic impacts of disability (median income by disability status, insurance by disability status, working status by difficulties)
-- impacts of disability with other predictors (age, sex, race...)
-
 
 ## Calling in libraries
 
@@ -96,7 +91,7 @@ educ_emp<- variables %>%
   select(name, label1, label2, label3) %>% 
   filter(!is.na(label3) | label2 == "not_labor")
 
-variables %>%
+pov_dis_emp<- variables %>%
   filter(!label2 == 'Total:') %>%
   filter(substr(name, 1, 6) == "B23024") %>%
   mutate(label1 = case_when(str_detect(label1, "above") ~ "above_pov",
@@ -122,5 +117,54 @@ emp_dis<- variables %>%
          label2 = case_when(str_detect(label2, "Employed")~ "emp",
                             str_detect(label2, "Unemp")~ "unemp")) %>%
   select(name, label1, label2, label3)
+```
+
+```{r}
+educ_emp_data <- get_acs(geography='tract', state = "IL", variables = c(educ_emp$name), survey = "acs5", year = 2023, cache = TRUE)
+
+educ_pov_data<- get_acs(geography='tract', state = "IL", variables = c(educ_pov$name), survey = "acs5", year = 2023, cache = TRUE)
+
+emp_dis_data <- get_acs(geography='tract', state = "IL", variables = c(emp_dis$name), survey = "acs5", year = 2023, cache = TRUE)
+
+pov_dis_emp_data<- get_acs(geography='tract', state = "IL", variables = c(pov_dis_emp$name), survey = "acs5", year = 2023, cache = TRUE)
+```
+
+```{r}
+a<- educ_emp_data %>%
+  pivot_wider(names_from = variable, values_from = c(estimate, moe)) %>%
+  select(!NAME)
+
+b<- educ_pov_data %>%
+  pivot_wider(names_from = variable, values_from = c(estimate, moe))%>%
+  select(!NAME)
+
+c<- emp_dis_data %>%
+  pivot_wider(names_from = variable, values_from = c(estimate, moe))%>%
+  select(!NAME)
+
+d<- pov_dis_emp_data %>%
+  pivot_wider(names_from = variable, values_from = c(estimate, moe))%>%
+  select(!NAME)
+```
+
+```{r}
+e<- a %>%
+  inner_join(b, by = join_by(GEOID)) %>%
+  inner_join(c, by = join_by(GEOID)) %>%
+  inner_join(d, by = join_by(GEOID))
+
+```
+
+
+```{r}
+# PUMS data example (takes a while to run, and we would pull in smaller batches of columns)
+
+pums_var<- pums_variables %>% 
+  filter(year == 2023, survey == "acs5") %>%
+  distinct(var_code, var_label, data_type, level) %>% 
+  filter(level == "person")
+
+pums<- get_pums(variables = c(pums_var$var_code[1:4]), year = 2023, state = "IL", survey = "acs5", recode = TRUE)
+
 ```
 
