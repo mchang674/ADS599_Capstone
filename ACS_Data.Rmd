@@ -166,5 +166,47 @@ pums_var<- pums_variables %>%
 
 pums<- get_pums(variables = c(pums_var$var_code[1:4]), year = 2023, state = "IL", survey = "acs5", recode = TRUE)
 
+pums %>%
+  filter(substr(SERIALNO, 1, 4) == '2023')
+
+```
+
+1-15, 20-26, 59, 61, 64-65, 96, 98-99, 107, 129-137, 145, 188
+
+
+```{r}
+vars<- c(pums_var$var_code[4:14], pums_var$var_code[20:26], pums_var$var_code[59], pums_var$var_code[64:65], pums_var$var_code[107], pums_var$var_code[129:137], pums_var$var_code[145], pums_var$var_code[188])
+
+pums_data<- get_pums(variables = 'AGEP', variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE)
+
+pums_data<- pums_data %>%
+  filter(substr(SERIALNO, 1, 4) == '2023') %>%
+  select(SERIALNO, SPORDER, AGEP, WGTP, PWGTP)
+
+for (var in vars){
+  var_data<- get_pums(variables = var, variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE) %>%
+    filter(substr(SERIALNO, 1, 4) == '2023') %>%
+    select(SERIALNO, SPORDER, starts_with(var))
+  
+  pums_data<- pums_data %>%
+    left_join(var_data, by = join_by(SERIALNO, SPORDER))
+  
+  Sys.sleep(10)
+  
+  print(paste("Data pull for", var,"is complete"))
+}
+```
+
+```{r}
+  var_data<- get_pums(variables = 'CIT', variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE) %>%
+    filter(substr(SERIALNO, 1, 4) == '2023') %>%
+    select(SERIALNO, SPORDER, CIT)
+
+
+print(paste("Data pull for", variable,"is complete"))
+```
+
+```{r}
+write_csv(pums_data, '/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
 ```
 
