@@ -1,0 +1,131 @@
+---
+title: "ACS Data"
+author: "Madeline Chang"
+date: "2025-11-01"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Calling in libraries
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(janitor)
+library(lubridate)
+library(googlesheets4)
+library(rlang)
+library(gridExtra)
+library(corrplot)
+library(forcats)
+library(stats)
+library(mosaic)
+library(knitr)
+library(weights)
+library(Hmisc)
+
+library(tidycensus)
+```
+
+## Reading in the data 
+
+```{r}
+pums_data<- read.csv('/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
+```
+
+
+## Creating a key for the variables with descriptive labels
+
+```{r}
+label_names<- pums_data %>%
+  select(ends_with('label')) %>%
+  colnames()
+
+
+label_tbl<- tibble(measure = character(),
+                   value = character(),
+                   desc = character())
+
+
+pivot_labels<- function(full_label){
+  
+  short<- str_remove(full_label, "_label")
+  
+  test<- pums_data %>%
+    select(all_of(short), all_of(full_label)) %>%
+    distinct() %>%
+    rename(desc = full_label, value = short) %>%
+    mutate(measure = short) %>%
+    select(measure, value, desc)
+  
+  return(test)
+  
+}
+
+for(label in label_names){
+  output<- pivot_labels(label)
+  
+  label_tbl<- label_tbl %>%
+              rbind(output)
+}
+```
+
+
+## Adjusting indicator variables so that No = 0 and Yes = 1
+
+```{r}
+bin_fix<- c('DDRS', 'DEAR', 'DEYE', 'DOUT', 'DPHY', 'DREM', 'HINS1', 'HINS2', 'HINS3', 'HINS4', 'HINS5', 'HINS6', 'HINS7', 'DIS')
+
+for(label in bin_fix){
+  pums_data[[label]] <- ifelse(pums_data[[label]] == 2, 0, 1)
+}
+```
+
+
+## Creating buckets for educational attainment
+
+```{r}
+pums_data_col<- pums_data %>%
+  mutate(SCHL = as.factor(SCHL)) %>%
+  mutate(edu_cat = fct_collapse(SCHL, up_to_grade= c('1', '2', '3', '4', '5', '6', '7', '8'),
+                                middle = c('9', '10', '11'),
+                                some_hs = c('12', '13', '14', '15'),
+                                hs_dip_equiv = c('16', '17'),
+                                some_coll = c('18', '19'),
+                                assoc_bach = c('20', '21'),
+                                masters_pl = c('22', '23', '24')))
+```
+
+
+## Summary statistics (weighted) of total income by sex, disability, and education attainment
+```{r}
+pums_data_col %>%
+  group_by(SEX_label, DIS_label, edu_cat) %>%
+  summarise(min = wtd.quantile(PINCP, weight = PWGTP, probs=c(0)),
+            q1 = wtd.quantile(PINCP, weight = PWGTP, probs=c(0.25)),
+            median = wtd.median(PINCP, weight = PWGTP),
+            q3 = wtd.quantile(PINCP, weight = PWGTP, probs=c(0.75)),
+            max = wtd.quantile(PINCP, weight = PWGTP, probs=c(1)),               
+            mean = weighted.mean(PINCP, w=PWGTP),
+            count = sum(PWGTP)
+)
+```
+
+
+## Weighted boxplots of total income and earnings in the last 12 months by educational attainment and disability
+
+```{r}
+ggplot(data = pums_data_col, weight = PWGTP) +
+  geom_boxplot(aes(x = edu_cat, y = PINCP, fill = DIS_label)) +
+  labs(x = 'Educational Attainment', y = 'Total Income', fill = "Disability Status")
+
+ggplot(data = pums_data_col, weight = PWGTP) +
+  geom_boxplot(aes(x = edu_cat, y = WAGP, fill = DIS_label)) +
+  labs(x = 'Educational Attainment', y = 'Income from Last 12 Months', fill = "Disability Status")
+```
+
+
+
+

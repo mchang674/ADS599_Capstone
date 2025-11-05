@@ -33,127 +33,7 @@ library(stats)
 library(tidycensus)
 ```
 
-## Finding available measures centered around disability status
-
-```{r}
-var<- load_variables(2023, "acs5", cache = TRUE)
-var<- var %>%
-  mutate(dis = str_detect(concept, 'Disability'),
-         dis2 = str_detect(label, 'disability'),
-         edu = str_detect(concept, 'Education'),
-         edu2 = str_detect(label, 'education'))
-
-var %>%
-  filter(edu2 == TRUE | edu == TRUE) %>%  
-  group_by(concept) %>%
-  summarise(count = n()) %>%
-  print(n = 45)
-```
-
 ----------------------
-
-```{r}
-variables<- var %>%
-  filter(substr(name, 1, 6) == 'B17003' | substr(name, 1, 6) == 'B23006' | substr(name, 1, 6) == 'B23024' | substr(name, 1, 6) == 'C18120') %>%
-  mutate(label = str_remove(label, 'Estimate!!Total:!!')) %>%
-  separate_wider_delim(label, delim = "!!", too_few = "align_start", names_sep = "")
-
-
-# smallest we can do is tract
-
-educ_pov<- variables %>%
-  filter(!label2 == 'Total:') %>%
-  filter(substr(name, 1, 6) == 'B17003') %>%
-  mutate(label1 = case_when(str_detect(label1, "above") ~ "above_pov",
-                           str_detect(label1, "below") ~ "below_pov"),
-         label2 = case_when(str_detect(label2, "Male")~ "M",
-                            str_detect(label2, "Female") ~ "F"),
-         label3 = case_when(str_detect(label3, "Less than")~ "less_hs",
-                            str_detect(label3, "High school grad")~ "hs",
-                            str_detect(label3, "Some college")~ "some_tert",
-                            str_detect(label3, "or higher")~ "tert_plus")) %>%
-  select(name, label1, label2, label3) %>%
-  drop_na()
-
-
-educ_emp<- variables %>%
-  filter(!label2 == 'Total:') %>%
-  filter(substr(name, 1, 6) == "B23006") %>%
-  mutate(label1 = case_when(str_detect(label1, "Less than")~ "less_hs",
-                            str_detect(label1, "High school grad")~ "hs",
-                            str_detect(label1, "Some college")~ "some_tert",
-                            str_detect(label1, "or higher")~ "tert_plus"),
-         label2 = case_when(str_detect(label2, 'In labor')~ "in_labor",
-                            str_detect(label2, "Not in")~ "not_labor"),
-         label3 = case_when(str_detect(label3, "Armed")~ "arm_force",
-                            str_detect(label3, "Civil") & str_detect(label4, "Employed")~ "civil_emp",
-                            str_detect(label3, "Civil") & str_detect(label4, "Unemployed")~ "civil_un")) %>%
-  select(name, label1, label2, label3) %>% 
-  filter(!is.na(label3) | label2 == "not_labor")
-
-pov_dis_emp<- variables %>%
-  filter(!label2 == 'Total:') %>%
-  filter(substr(name, 1, 6) == "B23024") %>%
-  mutate(label1 = case_when(str_detect(label1, "above") ~ "above_pov",
-                           str_detect(label1, "below") ~ "below_pov"),
-         label2 = case_when(str_detect(label2, "With a dis")~ "dis",
-                            str_detect(label2, "No dis")~ "no_dis"),
-         label3 = case_when(str_detect(label3, 'In labor')~ "in_labor",
-                            str_detect(label3, "Not in")~ "not_labor"),
-         label4 = case_when(str_detect(label4, "Armed")~ "arm_force",
-                            str_detect(label4, "Civil") & str_detect(label5, "Employed")~ "civil_emp",
-                            str_detect(label4, "Civil") & str_detect(label5, "Unemployed")~ "civil_un")) %>%
-  select(name, label1, label2, label3, label4) %>%
-  filter(!is.na(label4) | label2 == "no_dis" & !is.na(label3))
-
-
-emp_dis<- variables %>%
-  filter(!label2 == 'Total:') %>%
-  filter(substr(name, 1, 6) == "C18120") %>%
-  mutate(label1 = case_when(str_detect(label1, 'In the labor')~ "in_labor",
-                            str_detect(label1, "Not in")~ "not_labor"),
-         label3 = case_when(str_detect(label3, "With a dis") | str_detect(label2, "With a dis")~ "dis",
-                            str_detect(label3, "No dis") | str_detect(label2, "No dis")~ "no_dis"),
-         label2 = case_when(str_detect(label2, "Employed")~ "emp",
-                            str_detect(label2, "Unemp")~ "unemp")) %>%
-  select(name, label1, label2, label3)
-```
-
-```{r}
-educ_emp_data <- get_acs(geography='tract', state = "IL", variables = c(educ_emp$name), survey = "acs5", year = 2023, cache = TRUE)
-
-educ_pov_data<- get_acs(geography='tract', state = "IL", variables = c(educ_pov$name), survey = "acs5", year = 2023, cache = TRUE)
-
-emp_dis_data <- get_acs(geography='tract', state = "IL", variables = c(emp_dis$name), survey = "acs5", year = 2023, cache = TRUE)
-
-pov_dis_emp_data<- get_acs(geography='tract', state = "IL", variables = c(pov_dis_emp$name), survey = "acs5", year = 2023, cache = TRUE)
-```
-
-```{r}
-a<- educ_emp_data %>%
-  pivot_wider(names_from = variable, values_from = c(estimate, moe)) %>%
-  select(!NAME)
-
-b<- educ_pov_data %>%
-  pivot_wider(names_from = variable, values_from = c(estimate, moe))%>%
-  select(!NAME)
-
-c<- emp_dis_data %>%
-  pivot_wider(names_from = variable, values_from = c(estimate, moe))%>%
-  select(!NAME)
-
-d<- pov_dis_emp_data %>%
-  pivot_wider(names_from = variable, values_from = c(estimate, moe))%>%
-  select(!NAME)
-```
-
-```{r}
-e<- a %>%
-  inner_join(b, by = join_by(GEOID)) %>%
-  inner_join(c, by = join_by(GEOID)) %>%
-  inner_join(d, by = join_by(GEOID))
-
-```
 
 
 ```{r}
@@ -164,18 +44,22 @@ pums_var<- pums_variables %>%
   distinct(var_code, var_label, data_type, level) %>% 
   filter(level == "person")
 
-pums<- get_pums(variables = c(pums_var$var_code[1:4]), year = 2023, state = "IL", survey = "acs5", recode = TRUE)
-
-pums %>%
-  filter(substr(SERIALNO, 1, 4) == '2023')
-
 ```
 
-1-15, 20-26, 59, 61, 64-65, 96, 98-99, 107, 129-137, 145, 188
-
+4-14: citizenship, year of naturalization write in, class of worker, difficulties, veteran service connected disability rating (% and check box)
+20-26: insurance
+59: educational attainment
+61: sex
+62-65: wages/salary income, hours worked per week in past year
+77: employment status
+80: health insurance re-code
+96: total person's income
+98: income to poverty ratio re-code
+107: race
+190: self employment allocation
 
 ```{r}
-vars<- c(pums_var$var_code[4:14], pums_var$var_code[20:26], pums_var$var_code[59], pums_var$var_code[64:65], pums_var$var_code[107], pums_var$var_code[129:137], pums_var$var_code[145], pums_var$var_code[188])
+vars<- c(pums_var$var_code[4:14], pums_var$var_code[20:26], pums_var$var_code[59], pums_var$var_code[61:65], pums_var$var_code[77], pums_var$var_code[96], pums_var$var_code[98],pums_var$var_code[107], pums_var$var_code[190])
 
 pums_data<- get_pums(variables = 'AGEP', variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE)
 
@@ -198,15 +82,16 @@ for (var in vars){
 ```
 
 ```{r}
-  var_data<- get_pums(variables = 'CIT', variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE) %>%
+var_data2<- get_pums(variables = 'DIS', variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE) %>%
     filter(substr(SERIALNO, 1, 4) == '2023') %>%
-    select(SERIALNO, SPORDER, CIT)
+    select(SERIALNO, SPORDER, starts_with('DIS'))
 
-
-print(paste("Data pull for", variable,"is complete"))
+pums_data_2<- pums_data %>%
+  left_join(var_data2, by = join_by(SERIALNO, SPORDER))
 ```
 
+
 ```{r}
-write_csv(pums_data, '/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
+write_csv(pums_data_2, '/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
 ```
 
