@@ -25,6 +25,7 @@ library(mosaic)
 library(knitr)
 library(weights)
 library(Hmisc)
+library(corrplot)
 
 library(tidycensus)
 ```
@@ -34,44 +35,6 @@ library(tidycensus)
 ```{r}
 pums_data<- read.csv('/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
 ```
-
-
-## Creating a key for the variables with descriptive labels
-
-```{r}
-label_names<- pums_data %>%
-  select(ends_with('label')) %>%
-  colnames()
-
-
-label_tbl<- tibble(measure = character(),
-                   value = character(),
-                   desc = character())
-
-
-pivot_labels<- function(full_label){
-  
-  short<- str_remove(full_label, "_label")
-  
-  test<- pums_data %>%
-    select(all_of(short), all_of(full_label)) %>%
-    distinct() %>%
-    rename(desc = full_label, value = short) %>%
-    mutate(measure = short) %>%
-    select(measure, value, desc)
-  
-  return(test)
-  
-}
-
-for(label in label_names){
-  output<- pivot_labels(label)
-  
-  label_tbl<- label_tbl %>%
-              rbind(output)
-}
-```
-
 
 ## Adjusting indicator variables so that No = 0 and Yes = 1
 
@@ -84,7 +47,7 @@ for(label in bin_fix){
 ```
 
 
-## Creating buckets for educational attainment
+## Creating derived variables
 
 ```{r}
 pums_data_col<- pums_data %>%
@@ -95,11 +58,24 @@ pums_data_col<- pums_data %>%
                                 hs_dip_equiv = c('16', '17'),
                                 some_coll = c('18', '19'),
                                 assoc_bach = c('20', '21'),
-                                masters_pl = c('22', '23', '24')))
+                                masters_pl = c('22', '23', '24')),
+         COW_desc = case_when(COW == 1 ~ "for_profit_or_ind",
+                              COW == 2 ~ "not_profit",
+                              COW == 3 ~ "local_gov",
+                              COW == 4 ~ "state_gov",
+                              COW == 5 ~ "fed_gov",
+                              COW == 6 ~ "self_not_incorp",
+                              COW == 7 ~ "self_incorp",
+                              COW == 8 ~ "family_bus_wo_pay",
+                              COW == 9 ~ "unemp",
+                              COW == 'b' ~ "not_labor_force"))
 ```
 
 
+
+
 ## Summary statistics (weighted) of total income by sex, disability, and education attainment
+
 ```{r}
 pums_data_col %>%
   group_by(SEX_label, DIS_label, edu_cat) %>%
@@ -119,13 +95,128 @@ pums_data_col %>%
 ```{r}
 ggplot(data = pums_data_col, weight = PWGTP) +
   geom_boxplot(aes(x = edu_cat, y = PINCP, fill = DIS_label)) +
-  labs(x = 'Educational Attainment', y = 'Total Income', fill = "Disability Status")
+  labs(x = 'Educational Attainment', y = 'Total Income', fill = "Disability Status", title = "Total Income by Educational Attainment")
 
 ggplot(data = pums_data_col, weight = PWGTP) +
   geom_boxplot(aes(x = edu_cat, y = WAGP, fill = DIS_label)) +
-  labs(x = 'Educational Attainment', y = 'Income from Last 12 Months', fill = "Disability Status")
+  labs(x = 'Educational Attainment', y = 'Income from Last 12 Months', fill = "Disability Status", title = "Income from Last 12 Months by Educational Attainment")
+```
+
+## Barplots of Disabilty Difficulty by Educational Attainment
+
+```{r}
+disabled<- pums_data_col %>%
+  pivot_longer(cols = c(DDRS_label, DEAR_label, DEYE_label, DOUT_label, DPHY_label, DREM_label), names_to = "difficulty", values_to = "value") %>%
+  filter(value == "Yes") %>%
+  mutate(difficulty = case_when(difficulty == "DDRS_label"~ "self care",
+                                difficulty == "DEAR_label" ~ "hearing",
+                                difficulty == "DEYE_label" ~ "vision",
+                                difficulty == "DOUT_label" ~ "independent living",
+                                difficulty == "DPHY_label"~ "ambulatory",
+                                difficulty == "DREM_label"~ "cognitive"))
+
+disabled %>%
+  ggplot() +
+  geom_bar(aes(x = difficulty, fill = edu_cat), position = "dodge") +
+  labs(x = "Difficulty", y = "Count", fill = "Educational Attainment", title = "Count of Disability Difficulty by Educational Attainment")
+
+```
+
+## Barplots of Disabilty Difficulty by Type of Work
+
+```{r}
+disabled %>%
+  filter(difficulty == "self care") %>%
+  ggplot(weight = PWGTP) +
+  geom_bar(aes(x = COW_desc, fill =SEX_label), position = "dodge") +
+  labs(x = "Type of Work", y = "Count", fill = "Sex", title = "Count of Type of Work with Self Care Difficulty") +
+  coord_flip()
+
+disabled %>%
+  filter(difficulty == "hearing") %>%
+  ggplot(weight = PWGTP) +
+  geom_bar(aes(x = COW_desc, fill =SEX_label), position = "dodge") +
+  labs(x = "Type of Work", y = "Count", fill = "Sex", title = "Count of Type of Work with Hearing Difficulty") +
+  coord_flip()
+
+disabled %>%
+  filter(difficulty == "vision") %>%
+  ggplot(weight = PWGTP) +
+  geom_bar(aes(x = COW_desc, fill =SEX_label), position = "dodge") +
+  labs(x = "Type of Work", y = "Count", fill = "Sex", title = "Count of Type of Work with Vision Difficulty") +
+  coord_flip()
+
+disabled %>%
+  filter(difficulty == "ambulatory") %>%
+  ggplot(weight = PWGTP) +
+  geom_bar(aes(x = COW_desc, fill =SEX_label), position = "dodge") +
+  labs(x = "Type of Work", y = "Count", fill = "Sex", title = "Count of Type of Work with Ambulatory Difficulty") +
+  coord_flip()
+
+disabled %>%
+  filter(difficulty == "independent living") %>%
+  ggplot(weight = PWGTP) +
+  geom_bar(aes(x = COW_desc, fill =SEX_label), position = "dodge") +
+  labs(x = "Type of Work", y = "Count", fill = "Sex", title = "Count of Type of Work with Independent Living Difficulty") +
+  coord_flip()
+
+disabled %>%
+  filter(difficulty == "cognitive") %>%
+  ggplot(weight = PWGTP) +
+  geom_bar(aes(x = COW_desc, fill =SEX_label), position = "dodge") +
+  labs(x = "Type of Work", y = "Count", fill = "Sex", title = "Count of Type of Work with Cognitive Difficulty") +
+  coord_flip()
+
 ```
 
 
+## Barplots by Educational Attainment
 
+```{r}
+disabled %>%
+  mutate(SCHL = as.numeric(SCHL)) %>%
+  filter(SCHL >= 1 & SCHL <= 15) %>%
+  ggplot(weight = PWGTP) +
+  geom_bar(aes(x = edu_cat, fill = COW_desc), position = "dodge") +
+  labs(x = "Educational Attainment", y = "Count", title = "Educational Attainment by Type of Work for Disabled Individuals")
+
+disabled %>%
+  mutate(SCHL = as.numeric(SCHL)) %>%
+  filter(SCHL >= 16 & SCHL <= 19) %>%
+  ggplot(weight = PWGTP) +
+  geom_bar(aes(x = edu_cat, fill = COW_desc), position = "dodge") +
+  labs(x = "Educational Attainment", y = "Count", title = "Educational Attainment by Type of Work for Disabled Individuals")
+
+disabled %>%
+  mutate(SCHL = as.numeric(SCHL)) %>%
+  filter(SCHL > 19) %>%
+  ggplot(weight = PWGTP) +
+  geom_bar(aes(x = edu_cat, fill = COW_desc), position = "dodge") +
+  labs(x = "Educational Attainment", y = "Count", title = "Educational Attainment by Type of Work for Disabled Individuals")
+```
+
+
+## Correlation between Disability Difficulties
+
+```{r}
+pums_data_col %>%
+  mutate(num_diff = DDRS + DEAR + DEYE + DOUT + DPHY + DREM) %>%
+  group_by(num_diff) %>%
+  summarise(count = sum(PWGTP)) %>%
+  kable()
+
+pums_data_col %>%
+  select(DDRS, DEAR, DEYE, DOUT, DPHY, DREM) %>%
+  cor() %>%
+  corrplot(diag = FALSE, type = 'upper')
+```
+
+## Correlation of All Numeric Columns
+
+```{r}
+pums_data_col %>%
+  select(AGEP, DDRS, DEAR, DEYE, DOUT, DPHY, DREM, SSIP, SSP, WAGP, PINCP, POVPIP, FSEMP) %>%
+  cor() %>%
+  corrplot(diag = FALSE, type = 'upper')
+```
 
