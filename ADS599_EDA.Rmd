@@ -32,8 +32,9 @@ library(tidycensus)
 
 ## Reading in the data 
 
-```{r}
-pums_data<- read.csv('/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
+```{r setup, include=FALSE}
+library(here)
+pums_data <- readr::read_csv(here::here("pums_data.csv"))
 ```
 
 ## Adjusting indicator variables so that No = 0 and Yes = 1
@@ -219,4 +220,88 @@ pums_data_col %>%
   cor() %>%
   corrplot(diag = FALSE, type = 'upper')
 ```
+
+## MATT's Additions start - 
+
+##Poverty and Education additions
+
+#poverty indicators
+```{r}
+pums_data_col <- pums_data_col %>%
+  mutate(below_poverty = as.integer(POVPIP < 100),
+         deep_poverty = as.integer(POVPIP < 50)
+         )
+```
+
+#poverty table education & disability - weighted
+```{r}
+poverty_by_group <- pums_data_col %>%
+  group_by(DIS_label, edu_cat) %>% 
+  summarise(
+    poverty_rate = weighted.mean(below_poverty, w = PWGTP, na.rm = TRUE),
+    deep_poverty_rate = weighted.mean(deep_poverty,  w = PWGTP, na.rm = TRUE),
+    n_weighted = sum(PWGTP, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+knitr::kable(poverty_by_group, digits = 3,
+             caption = "Weighted poverty rates by disability status and education")
+```
+
+#Map of education and disability related to Poverty (<100% of threshold)
+```{r fig.width=7, fig.height=4}
+ggplot(poverty_by_group, aes(x = edu_cat, y = DIS_label, fill = poverty_rate)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(labels = scales::percent, name = "Poverty rate") +
+  labs(
+    title = "Poverty by Education and Disability Status - Weighted",
+    x = "Education obtained", y = "Disability status"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+#Map of education and disability related to Deep Poverty (<50% of threshold)
+```{r}
+ggplot(poverty_by_group, aes(x = edu_cat, y = DIS_label, fill = deep_poverty_rate)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(labels = scales::percent, name = "Deep poverty rate") +
+  labs(
+    title = "Deep Poverty by Education and Disability Status (Weighted)",
+    x = "Education obtained", y = "Disability status"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+#Line plot for poverty rates by education - disabled vs. not
+```{r}
+ggplot(poverty_by_group, aes(x = edu_cat, y = poverty_rate, color = DIS_label, group = DIS_label)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Weighted Poverty Rate by Education and Disability Status",
+    x = "Education Level", y = "Poverty Rate", color = "Disability Status"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+poverty_by_group %>%
+  group_by(DIS_label) %>%
+  summarise(mean_poverty = weighted.mean(poverty_rate, w = n_weighted))
+```
+DIS_label            mean_poverty
+With a disability           0.273
+Without a disability        0.102
+```{r}
+table(pums_data$ST, useNA = "ifany")
+table(pums_data$STATEFIP, useNA = "ifany")
+
+
+
+```
+
 
