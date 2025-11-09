@@ -51,15 +51,14 @@ pums_var<- pums_variables %>%
 59: educational attainment
 61: sex
 62-65: wages/salary income, hours worked per week in past year
+74: disabled status
 77: employment status
-80: health insurance re-code
 96: total person's income
 98: income to poverty ratio re-code
-107: race
-190: self employment allocation
+108-111, 113: race
 
 ```{r}
-vars<- c(pums_var$var_code[4:14], pums_var$var_code[20:26], pums_var$var_code[59], pums_var$var_code[61:65], pums_var$var_code[77], pums_var$var_code[96], pums_var$var_code[98],pums_var$var_code[107], pums_var$var_code[190])
+vars<- c(pums_var$var_code[4:14], pums_var$var_code[20:26], pums_var$var_code[59], pums_var$var_code[61:65], pums_var$var_code[74], pums_var$var_code[77], pums_var$var_code[96], pums_var$var_code[98],pums_var$var_code[108:111], pums_var$var_code[113])
 
 pums_data<- get_pums(variables = 'AGEP', variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE)
 
@@ -82,16 +81,5 @@ for (var in vars){
 ```
 
 ```{r}
-var_data2<- get_pums(variables = 'DIS', variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE) %>%
-    filter(substr(SERIALNO, 1, 4) == '2023') %>%
-    select(SERIALNO, SPORDER, starts_with('DIS'))
-
-pums_data_2<- pums_data %>%
-  left_join(var_data2, by = join_by(SERIALNO, SPORDER))
+write_csv(pums_data, '/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
 ```
-
-
-```{r}
-write_csv(pums_data_2, '/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
-```
-
