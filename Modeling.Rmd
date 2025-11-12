@@ -1,0 +1,221 @@
+---
+title: "ADS 599 Capstone: Modeling"
+author: "Madeline Chang"
+date: "2025-11-01"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(janitor)
+library(lubridate)
+library(caret)
+library(rlang)
+library(gridExtra)
+library(corrplot)
+library(forcats)
+library(stats)
+library(mosaic)
+library(knitr)
+library(weights)
+library(Hmisc)
+library(corrplot)
+library(kernlab)
+library(here)
+
+library(tidycensus)
+```
+
+```{r setup, include=FALSE}
+model_data <- readr::read_csv(here::here("model_data.csv"))
+
+model_data<- model_data %>%
+  mutate(pov_ind = as.factor(pov_ind)) 
+
+```
+
+
+# Anything from here down is not fully tested. The code is originally from a previous project and still needs to be adjusted to fit this project's data.
+
+## Data Splitting
+```{r}
+set.seed(720)
+
+# Create stratified random splits of the data (based on the classes)
+trainingRows <- createDataPartition(model_data$pov_ind, p = .80, list = FALSE) 
+
+# Subset data into train and test
+train <- model_data[trainingRows, ]
+test <- model_data[-trainingRows, ]
+
+# Create control method for cross validation
+ctrl <- trainControl(method = "cv",
+                     number = 3,
+                     summaryFunction = twoClassSummary,
+                     classProbs = TRUE,
+                     savePredictions = TRUE)
+```
+
+**Model Building Strategies**
+```{r warning=FALSE, message=FALSE}
+# Function for Training Models
+class_function<- function(method){
+  model<- train(x = train[,3:28], 
+               y = train$pov_ind,
+               weights = train$PWGTP,
+               method = method,
+               preProc = c("center", "scale"),
+               metric = "ROC",
+               trControl = ctrl)
+}
+
+# Function for Training Models with TuneGrids
+class_grid<- function(method, grid){
+  model<- train(x = train[,3:28], 
+               y = train$pov_ind,
+               weights = train$PWGTP,
+               method = method,
+               preProc = c("center", "scale"),
+               tuneGrid = grid,
+               metric = "ROC",
+               trControl = ctrl)
+}
+
+# Function for Training Models for Neural Networks
+class_nnet<- function(method, grid, maxit){
+  model<- train(x = train[,3:28], 
+               y = train$pov_ind,
+               weights = train$PWGTP,
+               method = method,
+               preProc = c("center", "scale"),
+               tuneGrid = grid,
+               maxit = maxit,
+               trace = FALSE, 
+               metric = "ROC",
+               trControl = ctrl)
+}
+
+# Function for Training Models with KNN
+class_length<- function(method, length){
+  model<- train(x = train[,3:28], 
+               y = train$pov_ind,
+               weights = train$PWGTP,
+               method = method,
+               #preProc = c("center", "scale"),
+               tuneLength = length,
+               metric = "ROC",
+               trControl = ctrl)
+}
+
+# Function for Training Models with Bagging
+class_bag<- function(method, nbagg){
+  model<- train(x = train[,3:28], 
+               y = train$pov_ind,
+               weights = train$PWGTP,
+               method = method,
+               preProc = c("center", "scale"),
+               nbagg = nbagg,
+               metric = "ROC",
+               trControl = ctrl)
+}
+
+# Function for Training Models with Random Forest
+class_rf<- function(method, grid, ntree){
+  model<- train(x = train[,3:28], 
+               y = train$pov_ind,
+               weights = train$PWGTP,
+               method = method,
+               preProc = c("center", "scale"),
+               tuneGrid = grid,
+               ntree = ntree,
+               metric = "ROC",
+               trControl = ctrl)
+}
+
+```
+
+**Hyper Parameter Tuning Defined in Grids**
+```{r warning=FALSE, message=FALSE}
+set.seed(720)
+
+# TuneGrid for Penalized Logistic Regression
+glmnGrid <- expand.grid(alpha = c(0,  .1,  .2, .4, .6, .8, 1),
+                        lambda = seq(.01, .2, length = 10))
+
+# NSC TuneGrid
+nsc_grid<- data.frame(threshold = seq(0, 25, length = 30))
+
+
+# NNET TuneGrid #########################################################
+nnet_grid <- expand.grid(size=1:4, decay=c(0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4))
+
+lassoGrid <- expand.grid(alpha = c(1),
+                        lambda = seq(.1, .8, length = 10))
+
+svmGrid<- data.frame(C = c(0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000))
+
+# RF TuneGrid
+mtryValues <- data.frame(mtry = seq(1,10,1))
+
+```
+
+
+```{r warning=FALSE, message=FALSE}
+set.seed(720)
+
+# Generalized Linear Model: Logistic Regression
+lr<- class_function("glm")
+
+# Lasso LR
+lasso<- class_grid("glmnet", lassoGrid)
+plot(lasso, main = "Hyperparameter Tuning: Lasso")
+
+# Penalized LR
+glmn<- class_grid("glmnet", glmnGrid)
+plot(glmn, main = "Hyperparameter Tuning: Penalized Logistic")
+
+# NNET
+nnet<- class_nnet("nnet", nnet_grid, 100)
+plot(nnet, main = "Hyperparameter Tuning: Neural Network")
+
+# K Nearest Neighbors
+#knn<- class_length("knn", 20)
+#plot(knn, main = "Hyperparameter Tuning: K-Nearest Neighbors")
+
+# SVM
+svm<- class_grid('svmLinear', svmGrid)
+plot(svm, main = "Hyperparameter Tuning: Support Vector Machine with Linear Kernel")
+
+# Bagging
+bag<- class_bag("treebag", 50)
+
+# Random Forest
+rf<- class_rf("rf", mtryValues, 100)
+plot(rf, main = "Hyperparameter Tuning: Random Forest")
+```
+
+**Model Performance**
+
+
+```{r, warning=FALSE, message=FALSE}
+
+train_re<- resamples(list(
+  lr = lr,
+  lda = lda,
+  glmn = glmn,
+  nsc = nsc,
+  lasso = lasso,
+  svmR = svmR,
+  knn = knn,
+  bag = bag,
+  rf = rf,
+  nnet = nnet
+))
+
+dotplot(train_re, metric = "Accuracy")
+
+```

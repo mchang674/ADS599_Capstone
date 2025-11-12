@@ -1,5 +1,5 @@
 ---
-title: "ACS Data"
+title: "ADS 599 Capstone: EDA"
 author: "Madeline Chang"
 date: "2025-11-01"
 output: pdf_document
@@ -69,12 +69,14 @@ pums_data_col<- pums_data %>%
                               COW == 7 ~ "self_incorp",
                               COW == 8 ~ "family_bus_wo_pay",
                               COW == 9 ~ "unemp",
-                              COW == 'b' ~ "not_labor_force")) %>%
+                              COW == 'b' ~ "not_labor_force"),
+         below_poverty = as.integer(POVPIP < 100),
+         deep_poverty = as.integer(POVPIP < 50)) %>%
   filter(!POVPIP == -1)
 ```
 
 
-
+# Total Income and Earnings
 
 ## Summary statistics (weighted) of total income by sex, disability, and education attainment
 
@@ -92,18 +94,127 @@ pums_data_col %>%
   kable()
 ```
 
-
 ## Weighted boxplots of total income and earnings in the last 12 months by educational attainment and disability
 
 ```{r}
 ggplot(data = pums_data_col, weight = PWGTP) +
   geom_boxplot(aes(x = edu_cat, y = PINCP, fill = DIS_label)) +
   labs(x = 'Educational Attainment', y = 'Total Income', fill = "Disability Status", title = "Total Income by Educational Attainment")
+```
+
+
+## Weighted boxplots of total income and earnings in the last 12 months by educational attainment and disability
+
+```{r}
+ggplot(data = pums_data_col, weight = PWGTP) +
+  geom_boxplot(aes(x = edu_cat, y = POVPIP, fill = DIS_label)) +
+  labs(x = 'Educational Attainment', y = '% of Poverty Line', fill = "Disability Status", title = "Total Income by Percent of Poverty Line")
 
 ggplot(data = pums_data_col, weight = PWGTP) +
   geom_boxplot(aes(x = edu_cat, y = WAGP, fill = DIS_label)) +
   labs(x = 'Educational Attainment', y = 'Income from Last 12 Months', fill = "Disability Status", title = "Income from Last 12 Months by Educational Attainment")
 ```
+
+
+# Percent of Poverty Line
+
+```{r}
+pums_data_col %>%
+  group_by(SEX_label, DIS_label, edu_cat) %>%
+  summarise(min = wtd.quantile(POVPIP, weight = PWGTP, probs=c(0)),
+            q1 = wtd.quantile(POVPIP, weight = PWGTP, probs=c(0.25)),
+            median = wtd.median(POVPIP, weight = PWGTP),
+            q3 = wtd.quantile(POVPIP, weight = PWGTP, probs=c(0.75)),
+            max = wtd.quantile(POVPIP, weight = PWGTP, probs=c(1)),               
+            mean = weighted.mean(POVPIP, w=PWGTP),
+            count = sum(PWGTP)
+) %>%
+  kable()
+```
+
+
+## Average Poverty Rate (weighted) by Education and Disability poverty table education & disability
+```{r}
+poverty_by_group <- pums_data_col %>%
+  group_by(DIS_label, edu_cat) %>% 
+  summarise(
+    poverty_rate = weighted.mean(below_poverty, w = PWGTP, na.rm = TRUE),
+    deep_poverty_rate = weighted.mean(deep_poverty,  w = PWGTP, na.rm = TRUE),
+    n_weighted = sum(PWGTP, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+knitr::kable(poverty_by_group, digits = 3,
+             caption = "Weighted poverty rates by disability status and education")
+```
+
+## Heatmap of Poverty Rate by Education and Disability
+```{r fig.width=7, fig.height=4}
+ggplot(poverty_by_group, aes(x = edu_cat, y = DIS_label, fill = poverty_rate)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(labels = scales::percent, name = "Poverty rate") +
+  labs(
+    title = "Poverty by Education and Disability Status - Weighted",
+    x = "Education obtained", y = "Disability status"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Heatmap of Deep Poverty Rate by Education and Disability
+```{r}
+ggplot(poverty_by_group, aes(x = edu_cat, y = DIS_label, fill = deep_poverty_rate)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(labels = scales::percent, name = "Deep poverty rate") +
+  labs(
+    title = "Deep Poverty by Education and Disability Status (Weighted)",
+    x = "Education obtained", y = "Disability status"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Visualizing Poverty rates with Increasing Education Level and Disability
+```{r}
+ggplot(poverty_by_group, aes(x = edu_cat, y = poverty_rate, color = DIS_label, group = DIS_label)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Weighted Poverty Rate by Education and Disability Status",
+    x = "Education Level", y = "Poverty Rate", color = "Disability Status"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+poverty_by_group %>%
+  group_by(DIS_label) %>%
+  summarise(mean_poverty = weighted.mean(poverty_rate, w = n_weighted))
+```
+DIS_label            mean_poverty
+With a disability           0.273
+Without a disability        0.102
+
+
+# Disability Difficulty
+
+## Correlation between Disability Difficulties
+
+```{r}
+pums_data_col %>%
+  mutate(num_diff = DDRS + DEAR + DEYE + DOUT + DPHY + DREM) %>%
+  group_by(num_diff) %>%
+  summarise(count = sum(PWGTP)) %>%
+  kable()
+
+pums_data_col %>%
+  select(DDRS, DEAR, DEYE, DOUT, DPHY, DREM) %>%
+  cor() %>%
+  corrplot(diag = FALSE, type = 'upper')
+```
+
 
 ## Barplots of Disabilty Difficulty by Educational Attainment
 
@@ -119,11 +230,18 @@ disabled<- pums_data_col %>%
                                 difficulty == "DREM_label"~ "cognitive"))
 
 disabled %>%
-  ggplot() +
+  ggplot(weight = PWGTP) +
   geom_bar(aes(x = difficulty, fill = edu_cat), position = "dodge") +
   labs(x = "Difficulty", y = "Count", fill = "Educational Attainment", title = "Count of Disability Difficulty by Educational Attainment")
 
 ```
+
+```{r}
+disabled %>%
+  ggplot(weight = PWGTP) +
+  geom_boxplot(aes(x = difficulty, y = POVPIP))
+```
+
 
 ## Barplots of Disabilty Difficulty by Type of Work
 
@@ -172,6 +290,7 @@ disabled %>%
 
 ```
 
+# Educational Attainment
 
 ## Barplots by Educational Attainment
 
@@ -199,21 +318,6 @@ disabled %>%
 ```
 
 
-## Correlation between Disability Difficulties
-
-```{r}
-pums_data_col %>%
-  mutate(num_diff = DDRS + DEAR + DEYE + DOUT + DPHY + DREM) %>%
-  group_by(num_diff) %>%
-  summarise(count = sum(PWGTP)) %>%
-  kable()
-
-pums_data_col %>%
-  select(DDRS, DEAR, DEYE, DOUT, DPHY, DREM) %>%
-  cor() %>%
-  corrplot(diag = FALSE, type = 'upper')
-```
-
 ## Correlation of All Numeric Columns
 
 ```{r}
@@ -223,92 +327,9 @@ pums_data_col %>%
   corrplot(diag = FALSE, type = 'upper')
 ```
 
-## MATT's Additions start - 
-
-##Poverty and Education additions
-
-#poverty indicators
-```{r}
-pums_data_col <- pums_data_col %>%
-  mutate(below_poverty = as.integer(POVPIP < 100),
-         deep_poverty = as.integer(POVPIP < 50)
-         )
-```
-
-#poverty table education & disability - weighted
-```{r}
-poverty_by_group <- pums_data_col %>%
-  group_by(DIS_label, edu_cat) %>% 
-  summarise(
-    poverty_rate = weighted.mean(below_poverty, w = PWGTP, na.rm = TRUE),
-    deep_poverty_rate = weighted.mean(deep_poverty,  w = PWGTP, na.rm = TRUE),
-    n_weighted = sum(PWGTP, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-knitr::kable(poverty_by_group, digits = 3,
-             caption = "Weighted poverty rates by disability status and education")
-```
-
-#Map of education and disability related to Poverty (<100% of threshold)
-```{r fig.width=7, fig.height=4}
-ggplot(poverty_by_group, aes(x = edu_cat, y = DIS_label, fill = poverty_rate)) +
-  geom_tile(color = "white") +
-  scale_fill_viridis_c(labels = scales::percent, name = "Poverty rate") +
-  labs(
-    title = "Poverty by Education and Disability Status - Weighted",
-    x = "Education obtained", y = "Disability status"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-#Map of education and disability related to Deep Poverty (<50% of threshold)
-```{r}
-ggplot(poverty_by_group, aes(x = edu_cat, y = DIS_label, fill = deep_poverty_rate)) +
-  geom_tile(color = "white") +
-  scale_fill_viridis_c(labels = scales::percent, name = "Deep poverty rate") +
-  labs(
-    title = "Deep Poverty by Education and Disability Status (Weighted)",
-    x = "Education obtained", y = "Disability status"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-#Line plot for poverty rates by education - disabled vs. not
-```{r}
-ggplot(poverty_by_group, aes(x = edu_cat, y = poverty_rate, color = DIS_label, group = DIS_label)) +
-  geom_line(size = 1.2) +
-  geom_point(size = 2) +
-  scale_y_continuous(labels = scales::percent_format()) +
-  labs(
-    title = "Weighted Poverty Rate by Education and Disability Status",
-    x = "Education Level", y = "Poverty Rate", color = "Disability Status"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-```
-
-```{r}
-poverty_by_group %>%
-  group_by(DIS_label) %>%
-  summarise(mean_poverty = weighted.mean(poverty_rate, w = n_weighted))
-```
-DIS_label            mean_poverty
-With a disability           0.273
-Without a disability        0.102
-```{r}
-table(pums_data$ST, useNA = "ifany")
-table(pums_data$STATEFIP, useNA = "ifany")
 
 
-
-```
-
-
-## Modeling Prep
-
+# Data Pre-Processing for Modeling
 
 ```{r}
 model_data<- pums_data_col %>%
@@ -330,182 +351,15 @@ model_data<- pums_data_col %>%
          race_black = RACBLK,
          race_hawaii = RACNH,
          race_pac_isl = RACPI) %>%
-  mutate(male = ifelse(sex == 1, 1, 0)) %>%
+  mutate(male = ifelse(sex == 1, 1, 0),
+         pov_ind = case_when(POVPIP < 100 ~ 'pov',
+                             POVPIP >= 100 ~ 'not_pov')) %>%
+  mutate(pov_ind = as.factor(pov_ind)) %>%
   select(-sex)
   
 ```
 
-
-
-
-# Anything from here down is not fully tested. The code is originally from a previous project and still needs to be adjusted to fit this project's data.
-
-## Data Splitting
 ```{r}
-set.seed(720)
-
-# Create stratified random splits of the data (based on the classes)
-trainingRows <- createDataPartition(model_data$POVPIP, p = .80, list = FALSE) 
-
-# Subset data into train and test
-train <- model_data[trainingRows, ]
-test <- model_data[-trainingRows, ]
-
-# Create control method for cross validation
-ctrl <- trainControl(method = "cv",
-                     summaryFunction = defaultSummary,
-                     savePredictions = TRUE)
+write_csv(model_data, '/Users/mtc/ADS/ADS 599/599 Project/model_data.csv')
 ```
 
-**Model Building Strategies**
-```{r warning=FALSE, message=FALSE}
-# Function for Training Models
-class_function<- function(method){
-  model<- train(x = train[,3:28], 
-               y = train$POVPIP,
-               weights = train$PWGTP,
-               method = method,
-               preProc = c("center", "scale"),
-               metric = "RMSE",
-               trControl = ctrl)
-}
-
-# Function for Training Models with TuneGrids
-class_grid<- function(method, grid){
-  model<- train(x = train[,3:28], 
-               y = train$POVPIP,
-               weights = train$PWGTP,
-               method = method,
-               preProc = c("center", "scale"),
-               tuneGrid = grid,
-               metric = "RMSE",
-               trControl = ctrl)
-}
-
-# Function for Training Models for Neural Networks
-class_nnet<- function(method, grid, maxit){
-  model<- train(x = train[,3:28], 
-               y = train$POVPIP,
-               weights = train$PWGTP,
-               method = method,
-               preProc = c("center", "scale"),
-               tuneGrid = grid,
-               maxit = maxit,
-               trace = FALSE, 
-               metric = "RMSE",
-               trControl = ctrl)
-}
-
-# Function for Training Models with KNN
-class_length<- function(method, length){
-  model<- train(x = train[,3:28], 
-               y = train$POVPIP,
-               weights = train$PWGTP,
-               method = method,
-               #preProc = c("center", "scale"),
-               tuneLength = length,
-               metric = "RMSE",
-               trControl = ctrl)
-}
-
-# Function for Training Models with Bagging
-class_bag<- function(method, nbagg){
-  model<- train(x = train[,3:28], 
-               y = train$POVPIP,
-               weights = train$PWGTP,
-               method = method,
-               preProc = c("center", "scale"),
-               nbagg = nbagg,
-               metric = "RMSE",
-               trControl = ctrl)
-}
-
-# Function for Training Models with Random Forest
-class_rf<- function(method, grid, ntree){
-  model<- train(x = train[,3:28], 
-               y = train$POVPIP,
-               weights = train$PWGTP,
-               method = method,
-               preProc = c("center", "scale"),
-               tuneGrid = grid,
-               ntree = ntree,
-               metric = "RMSE",
-               trControl = ctrl)
-}
-
-```
-
-**Hyper Parameter Tuning Defined in Grids**
-```{r warning=FALSE, message=FALSE}
-set.seed(720)
-
-# TuneGrid for Penalized Logistic Regression
-glmnGrid <- expand.grid(alpha = c(0,  .1,  .2, .4, .6, .8, 1),
-                        lambda = seq(.01, .2, length = 10))
-
-# NSC TuneGrid
-nsc_grid<- data.frame(threshold = seq(0, 25, length = 30))
-
-
-# NNET TuneGrid #########################################################
-nnet_grid <- expand.grid(size=1:4, decay=c(0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4))
-
-lassoGrid <- expand.grid(alpha = c(1),
-                        lambda = seq(.1, .4, length = 10))
-# RF TuneGrid
-mtryValues <- data.frame(mtry = seq(1,10,1))
-
-```
-
-
-```{r warning=FALSE, message=FALSE}
-set.seed(720)
-
-# Generalized Linear Model: Logistic Regression
-lr<- class_function("lm")
-
-# Lasso LR
-lasso<- class_grid("glmnet", lassoGrid)
-plot(lasso, main = "Hyperparameter Tuning: Lasso")
-
-# Penalized LR
-glmn<- class_grid("glmnet", glmnGrid)
-plot(glmn, main = "Hyperparameter Tuning: Penalized Logistic")
-
-# NNET
-nnet<- class_nnet("nnet", nnet_grid, 100)
-plot(nnet, main = "Hyperparameter Tuning: Neural Network")
-
-# K Nearest Neighbors
-#knn<- class_length("knn", 20)
-#plot(knn, main = "Hyperparameter Tuning: K-Nearest Neighbors")
-
-# Bagging
-bag<- class_bag("treebag", 50)
-
-# Random Forest
-rf<- class_rf("rf", mtryValues, 100)
-plot(rf, main = "Hyperparameter Tuning: Random Forest")
-```
-
-**Model Performance**
-
-
-```{r, warning=FALSE, message=FALSE}
-
-train_re<- resamples(list(
-  lr = lr,
-  lda = lda,
-  glmn = glmn,
-  nsc = nsc,
-  lasso = lasso,
-  svmR = svmR,
-  knn = knn,
-  bag = bag,
-  rf = rf,
-  nnet = nnet
-))
-
-dotplot(train_re, metric = "Accuracy")
-
-```
