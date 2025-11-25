@@ -360,6 +360,15 @@ model_data<- pums_data_col %>%
 ```
 
 ```{r}
-write_csv(model_data, '/Users/mtc/ADS/ADS 599/599 Project/model_data.csv')
+#write_csv(model_data, '/Users/mtc/ADS/ADS 599/599 Project/model_data.csv')
+```
+Matt's Data
+```{r}
+# Save my own copy
+write_csv(model_data, here::here("model_data_matt.csv"))
+
+# Load mine
+model_data_matt <- read_csv(here::here("model_data_matt.csv"))
+
 ```
 

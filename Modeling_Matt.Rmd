@@ -1,0 +1,101 @@
+---
+title: 'ADS 599 Capstone: Matt Modeling'
+author: 'Matt Ammirati'
+output: html_document
+date: "2025-11-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+**DOES NOT USE model_data
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(caret)
+library(forcats)
+library(here)
+library(knitr)
+
+# Load modeling data (saved from ADS599_EDA.Rmd)
+model_data_matt <- readr::read_csv(here::here("model_data_matt.csv"))
+
+glimpse(model_data_matt)
+```
+Create a 3 class poverty target.  We will use deep poverty, near poverty and not poverty.
+
+```{r}
+#build the class targets
+model_data_matt <- model_data_matt %>% 
+  mutate(
+    pov3 = case_when (
+      POVPIP < 50 ~ 'deep_poverty',
+      POVPIP < 100 ~ 'near_poverty',
+      POVPIP >= 100 ~ 'not_poverty'
+    ),
+    pov3 = factor(pov3, levels = c("deep_poverty", "near_poverty", "not_poverty"))
+  )
+
+#distribution
+table(model_data_matt$pov3)
+prop.table(table(model_data_matt$pov3))
+```
+```{r}
+glimpse(model_data_matt)
+```
+
+Select specific variables
+```{r}
+matts_model_df <- model_data_matt %>% 
+  select(
+    age, edu_cat, COW_desc, dis, race_indigenous, race_asian, race_black, race_hawaii, race_pac_isl, WKHP, male, ins_prev_work, ins_direct, ins_medicare, ins_medicaid, ins_tricare, ins_va, ins_ind_health, DDRS, DEAR, DEYE, DOUT, DPHY, DREM, PWGTP, pov3
+  )
+```
+```{r}
+glimpse(matts_model_df)
+
+# outcome levels
+levels(matts_model_df$pov3)
+
+# classes
+sapply(matts_model_df, class)
+
+# missing value/variable
+colSums(is.na(matts_model_df))
+
+# missing rate
+mean(is.na(matts_model_df))
+
+# summary stats
+summary(matts_model_df)
+
+```
+```{r}
+matts_model_df <- matts_model_df %>% 
+  mutate(
+    edu_cat = factor(edu_cat),
+    COW_desc = factor(COW_desc),
+    pov3 = factor(pov3,
+                  levels = c("deep_poverty", "near_poverty", "not_poverty"))
+  )
+
+str(matts_model_df)
+```
+```{r}
+set.seed(365)
+
+training_rows <- createDataPartition(
+  matts_model_df$pov3,
+  p = 0.8, 
+  list = FALSE
+)
+
+train_matt <- matts_model_df[training_rows, ]
+test_matt <- matts_model_df[-training_rows, ]
+
+prop.table(table(train_matt$pov3))
+prop.table(table(train_matt$pov3))
+```
+
