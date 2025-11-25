@@ -350,11 +350,13 @@ model_data<- pums_data_col %>%
          race_asian = RACASN,
          race_black = RACBLK,
          race_hawaii = RACNH,
-         race_pac_isl = RACPI) %>%
+         race_pac_isl = RACPI,
+         vet = DRATX) %>%
   mutate(male = ifelse(sex == 1, 1, 0),
          pov_ind = case_when(POVPIP < 100 ~ 'pov',
                              POVPIP >= 100 ~ 'not_pov')) %>%
-  mutate(pov_ind = as.factor(pov_ind)) %>%
+  mutate(pov_ind = as.factor(pov_ind),
+         vet = ifelse(vet == 'b', 0, 1)) %>%
   select(-sex)
   
 ```
