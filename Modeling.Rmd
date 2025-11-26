@@ -49,7 +49,7 @@ names(one_hot) <- col_n
 
 model_data<- model_data[,1:3] %>%
   cbind(one_hot) %>%
-  cbind(model_data[,6:28])
+  cbind(model_data[,6:29])
 ```
 
 
@@ -79,7 +79,7 @@ ctrl <- trainControl(method = "cv",
 ```{r warning=FALSE, message=FALSE}
 # Function for Training Models
 class_function<- function(method){
-  model<- train(x = train[,3:42], 
+  model<- train(x = train[,3:43], 
                y = train$pov_ind,
                weights = train$PWGTP,
                method = method,
@@ -90,7 +90,7 @@ class_function<- function(method){
 
 # Function for Training Models with TuneGrids
 class_grid<- function(method, grid){
-  model<- train(x = train[,3:42], 
+  model<- train(x = train[,3:43], 
                y = train$pov_ind,
                weights = train$PWGTP,
                method = method,
@@ -103,7 +103,7 @@ class_grid<- function(method, grid){
 
 # Function for Training Models for Neural Networks
 class_nnet<- function(method, grid, maxit){
-  model<- train(x = train[,3:42], 
+  model<- train(x = train[,3:43], 
                y = train$pov_ind,
                weights = train$PWGTP,
                method = method,
@@ -117,7 +117,7 @@ class_nnet<- function(method, grid, maxit){
 
 # Function for Training Models with Bagging
 class_bag<- function(method, nbagg){
-  model<- train(x = train[,3:42], 
+  model<- train(x = train[,3:43], 
                y = train$pov_ind,
                weights = train$PWGTP,
                method = method,
@@ -129,7 +129,7 @@ class_bag<- function(method, nbagg){
 
 # Function for Training Models with Random Forest
 class_rf<- function(method, grid, ntree){
-  model<- train(x = train[,3:42], 
+  model<- train(x = train[,3:43], 
                y = train$pov_ind,
                weights = train$PWGTP,
                method = method,
@@ -317,9 +317,9 @@ plot(lda_r_Imp, top = 10, main = "Top 10 Variables for Repeated CV Linear Discri
 ```{r}
 testResults <- data.frame(
   obs = test$pov_ind,
-  lr = predict(lr_r, test[, 3:42]),
-  glmnet = predict(glmn_r, test[, 3:42]),
-  lda = predict(lda_r, test[, 3:42])
+  lr = predict(lr_r, test[, 3:43]),
+  glmnet = predict(glmn_r, test[, 3:43]),
+  lda = predict(lda_r, test[, 3:43])
 )
 
 selected_models <- c("lr", "glmnet", "lda")
@@ -334,11 +334,9 @@ for (model in selected_models) {
 LDA model has the best balanced accuracy.
 
 ## Regression
-"near the poverty line" is 100-125% of the poverty line
 
 ```{r}
 near_to_pov<- model_data %>%
-  #filter(POVPIP <= 125) %>%
   select(!pov_ind)
 
 trainingRows2<- createDataPartition(near_to_pov$POVPIP, p = .75, list = FALSE) 
@@ -347,133 +345,30 @@ test2 <- near_to_pov[-trainingRows2, ]
 ```
 
 
-```{r}
-# Create control method for cross validation
-ctrl2 <- trainControl(method = "repeatedcv",
-                     number = 5,
-                     summaryFunction = defaultSummary,
-                     savePredictions = TRUE)
-```
-
-
-```{r warning=FALSE, message=FALSE}
-# Function for Training Models
-class_function2<- function(method){
-  model<- train(x = train2[,3:42], 
-               y = train2$POVPIP,
-               weights = train2$PWGTP,
-               method = method,
-               preProc = c("center", "scale"),
-               metric = "RMSE",
-               trControl = ctrl2)
-}
-
-# Function for Training Models with TuneGrids
-class_grid2<- function(method, grid){
-  model<- train(x = train2[,3:42], 
-               y = train2$POVPIP,
-               weights = train2$PWGTP,
-               method = method,
-               preProc = c("center", "scale"),
-               tuneGrid = grid,
-               metric = "RMSE",
-               trControl = ctrl2)
-}
-
-
-# Function for Training Models with Bagging
-class_bag2<- function(method, nbagg){
-  model<- train(x = train2[,3:42], 
-               y = train2$POVPIP,
-               weights = train2$PWGTP,
-               method = method,
-               preProc = c("center", "scale"),
-               nbagg = nbagg,
-               metric = "RMSE",
-               trControl = ctrl2)
-}
-
-# Function for Training Models with Random Forest
-class_rf2<- function(method, grid, ntree){
-  model<- train(x = train2[,3:42], 
-               y = train2$POVPIP,
-               weights = train2$PWGTP,
-               method = method,
-               preProc = c("center", "scale"),
-               tuneGrid = grid,
-               ntree = ntree,
-               metric = "RMSE",
-               trControl = ctrl2)
-}
-
-```
-
-```{r warning=FALSE, message=FALSE}
-set.seed(720)
-
-#| cache: true
-
-# Generalized Linear Model: Logistic Regression
-lr2<- class_function2("lm")
-
-# Lasso LR
-lasso2<- class_grid2("glmnet", lassoGrid)
-plot(lasso2, main = "Hyperparameter Tuning: Lasso")
-
-
-# Bagging
-bag2<- class_bag2("treebag", 50)
-
-# Random Forest
-rf2<- class_rf2("rf", mtryValues, 100)
-plot(rf2, main = "Hyperparameter Tuning: Random Forest")
-
-```
 
 
 ```{r}
-train_reg<- resamples(list(
-  lr = lr2,
-  lasso = lasso2,
-  bag = bag2,
-  rf = rf2
-))
+# all variables
+lm1<- lm(POVPIP ~ ., data = train2[,2:43], weights = train2$PWGTP)
+summary(lm1)
 
-dotplot(train_reg, metric = "RMSE")
+# educational attainment with disability interactions
+lm2<- lm(POVPIP ~ assoc_bach + hs_dip_equiv + masters_pl + middle + some_coll + some_hs + assoc_bach*dis + hs_dip_equiv*dis + masters_pl*dis + some_coll*dis + some_hs*dis, data = train2, weights = PWGTP)
+summary(lm2)
+
+# educational attainment with disability interactions and standard hours worked per week
+lm3<- lm(POVPIP ~ assoc_bach + hs_dip_equiv + masters_pl + middle + some_coll + some_hs + assoc_bach*dis + hs_dip_equiv*dis + masters_pl*dis + some_coll*dis + some_hs*dis + WKHP, data = train2, weights = PWGTP)
+summary(lm3)
+
+# educational attainment with disability, standard hours worked per week, and geographical information
+lm4<- lm(POVPIP ~ age + assoc_bach + hs_dip_equiv + masters_pl + middle + some_coll + some_hs + tract_in + assoc_bach*dis + hs_dip_equiv*dis + masters_pl*dis + some_coll*dis + some_hs*dis + tract_in*dis, data = train2, weights = PWGTP)
+summary(lm4)
 ```
 
 ```{r}
-lr2_Imp <- varImp(lr2, scale = FALSE)
-lasso2_Imp <- varImp(lasso2, scale = FALSE)
-bag2_Imp<- varImp(bag2, scale = FALSE)
-rf2_Imp <- varImp(rf2, scale = FALSE)
-
-plot(lr2_Imp, top = 10, main = "Top 10 Variables in Linear Regression")
-plot(lasso2_Imp, top = 10, main = "Top 10 Variables in Lasso Regression")
-plot(bag2_Imp, top = 10, main = "Top 10 Variables in Bagging Regression")
-plot(rf2_Imp, top = 10, main = "Top 10 Variables in Random Forest Regression")
+RMSE(lm1)
+RMSE(lm2)
+RMSE(lm1)
+RMSE(lm1)
 ```
-
-
-```{r}
-regResults <- data.frame(
-  obs = test2$POVPIP,
-  lr = predict(lr2, test2[, 3:42]),
-  lasso = predict(lasso2, test2[, 3:42]),
-  bag = predict(bag2, test2[, 3:42]),
-  rf = predict(rf2, test2[, 3:42])
-)
-
-
-RMSE(regResults$lr, regResults$obs)
-RMSE(regResults$lasso, regResults$obs)
-RMSE(regResults$bag, regResults$obs)
-RMSE(regResults$rf, regResults$obs)
-
-```
-
-```{r}
-summary(lr2)
-```
-
 
