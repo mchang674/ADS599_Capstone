@@ -83,15 +83,14 @@ pums_data_col<- pums_data %>%
 
 # Adding geography information
 ```{r}
-geo<- puma %>%
-  mutate(FIPS = paste0(STATEFP, COUNTYFP)) %>%
-  inner_join(county, by = join_by(FIPS)) %>%
-  select(PUMA5CE, Value) %>%
-  unique()
+tract_per_puma<- puma %>%
+  filter(STATEFP == '17') %>% 
+  group_by(PUMA5CE) %>%
+  summarise(tract_in = length(unique(TRACTCE))) 
 
 
 pums_data_col %>%
-  inner_join(geo, by = join_by(PUMA == PUMA5CE))
+  inner_join(tract_per_puma, by = join_by(PUMA == PUMA5CE))
 
 ```
 
