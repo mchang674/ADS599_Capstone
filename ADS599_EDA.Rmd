@@ -35,6 +35,11 @@ library(tidycensus)
 
 ```{r setup, include=FALSE}
 pums_data <- readr::read_csv(here::here("pums_data.csv"))
+
+county<- readr::read_csv(here::here("Ruralurbancontinuumcodes2023.csv")) %>%
+  filter(Attribute == 'RUCC_2023' & State == 'IL')
+
+puma<- readr::read_csv(here::here("2020_Census_Tract_to_2020_PUMA.txt"))
 ```
 
 ## Adjusting indicator variables so that No = 0 and Yes = 1
@@ -73,6 +78,21 @@ pums_data_col<- pums_data %>%
          below_poverty = as.integer(POVPIP < 100),
          deep_poverty = as.integer(POVPIP < 50)) %>%
   filter(!POVPIP == -1)
+```
+
+
+# Adding geography information
+```{r}
+geo<- puma %>%
+  mutate(FIPS = paste0(STATEFP, COUNTYFP)) %>%
+  inner_join(county, by = join_by(FIPS)) %>%
+  select(PUMA5CE, Value) %>%
+  unique()
+
+
+pums_data_col %>%
+  inner_join(geo, by = join_by(PUMA == PUMA5CE))
+
 ```
 
 

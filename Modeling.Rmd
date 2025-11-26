@@ -338,7 +338,7 @@ LDA model has the best balanced accuracy.
 
 ```{r}
 near_to_pov<- model_data %>%
-  filter(POVPIP <= 125) %>%
+  #filter(POVPIP <= 125) %>%
   select(!pov_ind)
 
 trainingRows2<- createDataPartition(near_to_pov$POVPIP, p = .75, list = FALSE) 
@@ -472,5 +472,8 @@ RMSE(regResults$rf, regResults$obs)
 
 ```
 
+```{r}
+summary(lr2)
+```
 
 
