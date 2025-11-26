@@ -27,6 +27,7 @@ library(corrplot)
 library(kernlab)
 library(here)
 library(pROC)
+library(randomForest)
 
 library(tidycensus)
 ```
@@ -222,6 +223,7 @@ dotplot(train_re, metric = "ROC")
 ```
 
 
+
 ```{r, warning=FALSE, message=FALSE}
 model_roc <- function(model){
   roc(response = model$pred$obs,
@@ -331,7 +333,7 @@ for (model in selected_models) {
 
 LDA model has the best balanced accuracy.
 
-## For individuals near or below the poverty line, can a model be built to see where they fall in the poverty percentage?
+## Regression
 "near the poverty line" is 100-125% of the poverty line
 
 ```{r}
@@ -344,21 +346,131 @@ train2<-  near_to_pov[trainingRows2, ]
 test2 <- near_to_pov[-trainingRows2, ]
 ```
 
+
 ```{r}
-lin_model <- lm(POVPIP~., data = train2[2:42], weights = train2$PWGTP)
+# Create control method for cross validation
+ctrl2 <- trainControl(method = "repeatedcv",
+                     number = 5,
+                     summaryFunction = defaultSummary,
+                     savePredictions = TRUE)
+```
 
-summary(lin_model)
 
-test2$pred <- predict(lin_model, test2)
+```{r warning=FALSE, message=FALSE}
+# Function for Training Models
+class_function2<- function(method){
+  model<- train(x = train2[,3:42], 
+               y = train2$POVPIP,
+               weights = train2$PWGTP,
+               method = method,
+               preProc = c("center", "scale"),
+               metric = "RMSE",
+               trControl = ctrl2)
+}
 
-RMSE(test2$POVPIP, test2$pred)
+# Function for Training Models with TuneGrids
+class_grid2<- function(method, grid){
+  model<- train(x = train2[,3:42], 
+               y = train2$POVPIP,
+               weights = train2$PWGTP,
+               method = method,
+               preProc = c("center", "scale"),
+               tuneGrid = grid,
+               metric = "RMSE",
+               trControl = ctrl2)
+}
+
+
+# Function for Training Models with Bagging
+class_bag2<- function(method, nbagg){
+  model<- train(x = train2[,3:42], 
+               y = train2$POVPIP,
+               weights = train2$PWGTP,
+               method = method,
+               preProc = c("center", "scale"),
+               nbagg = nbagg,
+               metric = "RMSE",
+               trControl = ctrl2)
+}
+
+# Function for Training Models with Random Forest
+class_rf2<- function(method, grid, ntree){
+  model<- train(x = train2[,3:42], 
+               y = train2$POVPIP,
+               weights = train2$PWGTP,
+               method = method,
+               preProc = c("center", "scale"),
+               tuneGrid = grid,
+               ntree = ntree,
+               metric = "RMSE",
+               trControl = ctrl2)
+}
+
+```
+
+```{r warning=FALSE, message=FALSE}
+set.seed(720)
+
+#| cache: true
+
+# Generalized Linear Model: Logistic Regression
+lr2<- class_function2("lm")
+
+# Lasso LR
+lasso2<- class_grid2("glmnet", lassoGrid)
+plot(lasso2, main = "Hyperparameter Tuning: Lasso")
+
+
+# Bagging
+bag2<- class_bag2("treebag", 50)
+
+# Random Forest
+rf2<- class_rf2("rf", mtryValues, 100)
+plot(rf2, main = "Hyperparameter Tuning: Random Forest")
+
+```
+
+
+```{r}
+train_reg<- resamples(list(
+  lr = lr2,
+  lasso = lasso2,
+  bag = bag2,
+  rf = rf2
+))
+
+dotplot(train_reg, metric = "RMSE")
 ```
 
 ```{r}
-test2 %>%
-  mutate(dis = as.factor(dis),
-         resid = POVPIP - pred) %>%
-  ggplot() +
-  geom_point(aes(x = POVPIP, y = resid, color = dis))
+lr2_Imp <- varImp(lr2, scale = FALSE)
+lasso2_Imp <- varImp(lasso2, scale = FALSE)
+bag2_Imp<- varImp(bag2, scale = FALSE)
+rf2_Imp <- varImp(rf2, scale = FALSE)
+
+plot(lr2_Imp, top = 10, main = "Top 10 Variables in Linear Regression")
+plot(lasso2_Imp, top = 10, main = "Top 10 Variables in Lasso Regression")
+plot(bag2_Imp, top = 10, main = "Top 10 Variables in Bagging Regression")
+plot(rf2_Imp, top = 10, main = "Top 10 Variables in Random Forest Regression")
 ```
+
+
+```{r}
+regResults <- data.frame(
+  obs = test2$POVPIP,
+  lr = predict(lr2, test2[, 3:42]),
+  lasso = predict(lasso2, test2[, 3:42]),
+  bag = predict(bag2, test2[, 3:42]),
+  rf = predict(rf2, test2[, 3:42])
+)
+
+
+RMSE(regResults$lr, regResults$obs)
+RMSE(regResults$lasso, regResults$obs)
+RMSE(regResults$bag, regResults$obs)
+RMSE(regResults$rf, regResults$obs)
+
+```
+
+
 
