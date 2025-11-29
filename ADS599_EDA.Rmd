@@ -35,6 +35,11 @@ library(tidycensus)
 
 ```{r setup, include=FALSE}
 pums_data <- readr::read_csv(here::here("pums_data.csv"))
+
+county<- readr::read_csv(here::here("Ruralurbancontinuumcodes2023.csv")) %>%
+  filter(Attribute == 'RUCC_2023' & State == 'IL')
+
+puma<- readr::read_csv(here::here("2020_Census_Tract_to_2020_PUMA.txt"))
 ```
 
 ## Adjusting indicator variables so that No = 0 and Yes = 1
@@ -73,6 +78,20 @@ pums_data_col<- pums_data %>%
          below_poverty = as.integer(POVPIP < 100),
          deep_poverty = as.integer(POVPIP < 50)) %>%
   filter(!POVPIP == -1)
+```
+
+
+# Adding geography information
+```{r}
+tract_per_puma<- puma %>%
+  filter(STATEFP == '17') %>% 
+  group_by(PUMA5CE) %>%
+  summarise(tract_in = length(unique(TRACTCE))) 
+
+
+pums_data_col<- pums_data_col %>%
+  inner_join(tract_per_puma, by = join_by(PUMA == PUMA5CE))
+
 ```
 
 
@@ -194,8 +213,8 @@ poverty_by_group %>%
   summarise(mean_poverty = weighted.mean(poverty_rate, w = n_weighted))
 ```
 DIS_label            mean_poverty
-With a disability           0.273
-Without a disability        0.102
+With a disability           0.229
+Without a disability        0.903
 
 
 # Disability Difficulty
@@ -322,7 +341,7 @@ disabled %>%
 
 ```{r}
 pums_data_col %>%
-  select(AGEP, DDRS, DEAR, DEYE, DOUT, DPHY, DREM, SSIP, SSP, WAGP, PINCP, POVPIP) %>%
+  select(AGEP, DDRS, DEAR, DEYE, DOUT, DPHY, DREM, SSIP, SSP, WAGP, PINCP, tract_in, POVPIP) %>%
   cor() %>%
   corrplot(diag = FALSE, type = 'upper')
 ```
@@ -335,7 +354,7 @@ pums_data_col %>%
 model_data<- pums_data_col %>%
   select(PWGTP, POVPIP, AGEP, edu_cat, COW_desc, DIS, RACAIAN, RACASN, RACBLK, RACNH, 
          RACPI, WKHP, SEX, HINS1, HINS2, HINS3, HINS4, HINS5, HINS6, HINS7, DDRS, DEAR, 
-         DEYE, DOUT, DPHY, DRAT, DRATX, DREM) %>%
+         DEYE, DOUT, DPHY, DRAT, DRATX, DREM, tract_in) %>%
   rename(ins_prev_work = HINS1,
          ins_direct = HINS2,
          ins_medicare = HINS3,
@@ -350,11 +369,13 @@ model_data<- pums_data_col %>%
          race_asian = RACASN,
          race_black = RACBLK,
          race_hawaii = RACNH,
-         race_pac_isl = RACPI) %>%
+         race_pac_isl = RACPI,
+         vet = DRATX) %>%
   mutate(male = ifelse(sex == 1, 1, 0),
          pov_ind = case_when(POVPIP < 100 ~ 'pov',
                              POVPIP >= 100 ~ 'not_pov')) %>%
-  mutate(pov_ind = as.factor(pov_ind)) %>%
+  mutate(pov_ind = as.factor(pov_ind),
+         vet = ifelse(vet == 'b', 0, 1)) %>%
   select(-sex)
   
 ```

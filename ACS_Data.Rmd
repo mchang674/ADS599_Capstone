@@ -44,6 +44,10 @@ pums_var<- pums_variables %>%
   distinct(var_code, var_label, data_type, level) %>% 
   filter(level == "person")
 
+pums_variables %>% 
+  filter(survey == "acs5") %>%
+  distinct(var_code, var_label, data_type, level) %>%
+  filter(var_code == 'SERIALNO')
 ```
 
 4-14: citizenship, year of naturalization write in, class of worker, difficulties, veteran service connected disability rating (% and check box)
@@ -60,19 +64,19 @@ pums_var<- pums_variables %>%
 ```{r}
 vars<- c(pums_var$var_code[4:14], pums_var$var_code[20:26], pums_var$var_code[59], pums_var$var_code[61:65], pums_var$var_code[74], pums_var$var_code[77], pums_var$var_code[96], pums_var$var_code[98],pums_var$var_code[108:111], pums_var$var_code[113])
 
-pums_data<- get_pums(variables = 'AGEP', variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE)
+pums_data<- get_pums(variables = c('AGEP', 'PUMA'), variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE)
 
 pums_data<- pums_data %>%
-  filter(substr(SERIALNO, 1, 4) == '2023') %>%
-  select(SERIALNO, SPORDER, AGEP, WGTP, PWGTP)
+  filter(substr(SERIALNO, 1, 6) == '2023HU') %>%
+  select(SERIALNO, SPORDER, AGEP, WGTP, PWGTP, PUMA)
 
 for (var in vars){
-  var_data<- get_pums(variables = var, variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE) %>%
-    filter(substr(SERIALNO, 1, 4) == '2023') %>%
-    select(SERIALNO, SPORDER, starts_with(var))
+  var_data<- get_pums(variables = c(var, 'PUMA'), variables_filter = list(AGEP = 20:65), year = 2023, state = "IL", survey = "acs5", recode = TRUE) %>%
+    filter(substr(SERIALNO, 1, 6) == '2023HU') %>%
+    select(SERIALNO, SPORDER, starts_with(var), PUMA)
   
   pums_data<- pums_data %>%
-    left_join(var_data, by = join_by(SERIALNO, SPORDER))
+    left_join(var_data, by = join_by(SERIALNO, SPORDER, PUMA))
   
   Sys.sleep(10)
   
@@ -83,3 +87,6 @@ for (var in vars){
 ```{r}
 write_csv(pums_data, '/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
 ```
+
+
+
