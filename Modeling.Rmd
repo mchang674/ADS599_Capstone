@@ -29,6 +29,7 @@ library(here)
 library(pROC)
 library(randomForest)
 
+
 library(tidycensus)
 ```
 
@@ -52,11 +53,6 @@ model_data<- model_data[,1:3] %>%
   cbind(model_data[,6:29])
 ```
 
-```{r}
-
-```
-
-
 # Anything from here down is not fully tested. The code is originally from a previous project and still needs to be adjusted to fit this project's data.
 
 ## Data Splitting
@@ -78,6 +74,20 @@ ctrl <- trainControl(method = "cv",
                      classProbs = TRUE,
                      savePredictions = TRUE)
 ```
+-MA Chunk
+```{r}
+#double check imbalance and representation in split
+cat("Class Distribution Check:\n")
+
+cat("Training Set:\n")
+print(table(train$pov_ind))
+print(prop.table(table(train$pov_ind)) * 100)
+
+cat("\nTest Set:\n")
+print(table(test$pov_ind))
+print(prop.table(table(test$pov_ind)) * 100)
+```
+
 
 **Model Building Strategies**
 ```{r warning=FALSE, message=FALSE}
@@ -334,6 +344,164 @@ for (model in selected_models) {
   cat("\n")
 }
 ```
+-MA chunk - displays for test results
+```{r}
+#pull performance from confusion matrix
+lr_cm <- confusionMatrix(testResults$lr, testResults$obs, positive = "pov")
+glmnet_cm <- confusionMatrix(testResults$glmnet, testResults$obs, positive = "pov")
+lda_cm <- confusionMatrix(testResults$lda, testResults$obs, positive = "pov")
+```
+-MA chunk - summary table
+```{r}
+classification_summary <- data.frame(
+  Model = c("Logistic Regression", "Penalized Logistic (GLMNET)", "LDA"),
+  Accuracy = c(lr_cm$overall['Accuracy'],
+               glmnet_cm$overall['Accuracy'],
+               lda_cm$overall['Accuracy']),
+  Sensitivity = c(lr_cm$byClass['Sensitivity'],
+                  glmnet_cm$byClass['Sensitivity'],
+                  lda_cm$byClass['Sensitivity']),
+  Specificity = c(lr_cm$byClass['Specificity'],
+                  glmnet_cm$byClass['Specificity'],
+                  lda_cm$byClass['Specificity']),
+  Precision = c(lr_cm$byClass['Precision'],
+                glmnet_cm$byClass['Precision'],
+                lda_cm$byClass['Precision']),
+  F1 = c(lr_cm$byClass['F1'],
+         glmnet_cm$byClass['F1'],
+         lda_cm$byClass['F1']),
+  Balanced_Accuracy = c(lr_cm$byClass['Balanced Accuracy'],
+                        glmnet_cm$byClass['Balanced Accuracy'],
+                        lda_cm$byClass['Balanced Accuracy'])
+)
+
+#display the table
+kable(classification_summary, 
+      digits = 4,
+      caption = "Classification Model Performance on Test Set",
+      row.names = FALSE)
+```
+-MA chunk - Best models by metric for test data
+```{r}
+# Best by each metric
+best_acc <- which.max(classification_summary$Accuracy)
+best_sens <- which.max(classification_summary$Sensitivity)
+best_spec <- which.max(classification_summary$Specificity)
+best_bal <- which.max(classification_summary$Balanced_Accuracy)
+
+cat("Best Accuracy:\n")
+cat("  ", classification_summary$Model[best_acc], "\n")
+cat("  ", round(classification_summary$Accuracy[best_acc], 4), "\n\n")
+
+cat("Best Sensitivity (Recall):\n")
+cat("  ", classification_summary$Model[best_sens], "\n")
+cat("  ", round(classification_summary$Sensitivity[best_sens], 4), "\n\n")
+
+cat("Best Specificity:\n")
+cat("  ", classification_summary$Model[best_spec], "\n")
+cat("  ", round(classification_summary$Specificity[best_spec], 4), "\n\n")
+
+cat("Best Balanced Accuracy:\n")
+cat("  ", classification_summary$Model[best_bal], "\n")
+cat("  ", round(classification_summary$Balanced_Accuracy[best_bal], 4), "\n")
+```
+
+```{r}
+#predicted probabilities from the final retrained models
+test_lr_probs     <- predict(lr_r,    test[, 3:43], type = "prob")[, "pov"]
+test_glmnet_probs <- predict(glmn_r,  test[, 3:43], type = "prob")[, "pov"]
+test_lda_probs    <- predict(lda_r,   test[, 3:43], type = "prob")[, "pov"]
+
+#build ROC objects
+lr_test_roc     <- roc(test$pov_ind, test_lr_probs,     levels = rev(levels(test$pov_ind)))
+glmnet_test_roc <- roc(test$pov_ind, test_glmnet_probs, levels = rev(levels(test$pov_ind)))
+lda_test_roc    <- roc(test$pov_ind, test_lda_probs,    levels = rev(levels(test$pov_ind)))
+
+#ROC curves
+plot(lr_test_roc, col="red", type="s", lwd=2,
+     main="TEST SET ROC Curves — Poverty Classification")
+plot(glmnet_test_roc, col="blue", add=TRUE, type="s", lwd=2)
+plot(lda_test_roc, col="green", add=TRUE, type="s", lwd=2)
+
+legend("bottomright",
+       legend=c(
+         paste("LR (AUC =", round(lr_test_roc$auc,4), ")"),
+         paste("GLMNET (AUC =", round(glmnet_test_roc$auc,4), ")"),
+         paste("LDA (AUC =", round(lda_test_roc$auc,4), ")")
+       ),
+       col=c("red","blue","green"),
+       lwd=2)
+
+```
+
+
+-MA chunk - classification bar chart
+```{r}
+#shape for plotting
+classification_long <- classification_summary %>%
+  select(Model, Accuracy, Sensitivity, Specificity) %>%
+  pivot_longer(cols = c(Accuracy, Sensitivity, Specificity),
+               names_to = "Metric",
+               values_to = "Value")
+
+#grouped bar chart
+ggplot(classification_long, aes(x = Model, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  geom_text(aes(label = round(Value, 3)), 
+            position = position_dodge(width = 0.7),
+            vjust = -0.5, size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("Accuracy" = "steelblue", 
+                                "Sensitivity" = "red", 
+                                "Specificity" = "darkgreen")) +
+  labs(
+    title = "Classification Model Performance Comparison (Test Set)",
+    subtitle = "Comparing Accuracy, Sensitivity, and Specificity",
+    y = "Score",
+    x = "",
+    fill = "Metric"
+  ) +
+  ylim(0, 1.1) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 13),
+    plot.subtitle = element_text(hjust = 0.5, size = 11),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 15, hjust = 1, face = "bold", size = 11),
+    axis.text.y = element_text(size = 11)
+  )
+```
+
+
+
+-MA chunk - calibration for evaluating probability accuracy
+```{r}
+#evaluate probability accuracy
+#predicted vs. observed
+testProbs <- data.frame(
+  obs    = test$pov_ind,
+  lr     = predict(lr_r,    test[, 3:43], type = "prob")[, "pov"],
+  glmnet = predict(glmn_r,  test[, 3:43], type = "prob")[, "pov"],
+  lda    = predict(lda_r,   test[, 3:43], type = "prob")[, "pov"]
+)
+
+#calibration function to bin predictions and compare to actuals
+calib <- caret::calibration(
+  obs ~ lr + glmnet + lda,
+  data  = testProbs,
+  class = "pov",     
+  cuts  = 10         
+)
+
+xyplot(
+  calib,
+  auto.key = list(columns = 3),
+  xlab = "Predicted probability of poverty",
+  ylab = "Observed poverty rate",
+  main = "Calibration of Selected Models on Test Set"
+)
+```
+
 
 LDA model has the best balanced accuracy.
 
@@ -374,5 +542,184 @@ RMSE(lm1)
 RMSE(lm2)
 RMSE(lm1)
 RMSE(lm1)
+```
+Here and Below: Contribution: Matt
+Evaluate the regression model performance on test data
+```{r}
+ # Get predictions on test set
+pred1 <- predict(lm1, newdata = test2)
+pred2 <- predict(lm2, newdata = test2)
+pred3 <- predict(lm3, newdata = test2)
+pred4 <- predict(lm4, newdata = test2)
+```
+
+```{r}
+# Calculate all metrics using postResample (from caret package)
+cat("Calculating test set performance metrics...\n\n")
+
+metrics1 <- postResample(pred1, test2$POVPIP)
+metrics2 <- postResample(pred2, test2$POVPIP)
+metrics3 <- postResample(pred3, test2$POVPIP)
+metrics4 <- postResample(pred4, test2$POVPIP)
+
+# Display individual model results
+cat("LM1 (All Variables):\n")
+print(metrics1)
+cat("\n")
+
+cat("LM2 (Education + Disability Interactions):\n")
+print(metrics2)
+cat("\n")
+
+cat("LM3 (+ Work Hours):\n")
+print(metrics3)
+cat("\n")
+
+cat("LM4 (+ Geography):\n")
+print(metrics4)
+cat("\n")
+```
+
+```{r}
+# Create comprehensive comparison table
+regression_comparison <- data.frame(
+  Model = c("LM1: All Variables", 
+            "LM2: Edu + Disability", 
+            "LM3: + Work Hours", 
+            "LM4: + Geography"),
+  RMSE = c(metrics1['RMSE'], 
+           metrics2['RMSE'], 
+           metrics3['RMSE'], 
+           metrics4['RMSE']),
+  Rsquared = c(metrics1['Rsquared'], 
+               metrics2['Rsquared'], 
+               metrics3['Rsquared'], 
+               metrics4['Rsquared']),
+  MAE = c(metrics1['MAE'], 
+          metrics2['MAE'], 
+          metrics3['MAE'], 
+          metrics4['MAE'])
+)
+```
+
+```{r}
+# Display comparison table
+kable(regression_comparison, 
+      digits = 3,
+      caption = "Regression Model Performance Comparison on Test Set",
+      row.names = FALSE)
+```
+
+Predicted vs Actual - not too helpful, hard to see. Leaving it for now. 
+```{r}
+pred_actual_data <- data.frame(
+  Actual = rep(test2$POVPIP, 4),
+  Predicted = c(pred1, pred2, pred3, pred4),
+  Model = rep(c("LM1: All Variables", 
+                "LM2: Edu + Disability", 
+                "LM3: + Work Hours", 
+                "LM4: + Geography"), 
+              each = length(pred1))
+)
+
+ggplot(pred_actual_data, aes(x = Actual, y = Predicted)) +
+  geom_point(alpha = 0.4, size = 1, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, 
+              color = "red", linetype = "dashed", size = 1) +
+  geom_smooth(method = "lm", se = TRUE, 
+              color = "darkgreen", size = 0.8, alpha = 0.2) +
+  facet_wrap(~Model, ncol = 2) +
+  labs(
+    title = "Predicted vs Actual POVPIP by Model",
+    subtitle = "Red dashed line = perfect predictions | Green line = actual model fit",
+    x = "Actual Poverty Income Ratio",
+    y = "Predicted Poverty Income Ratio",
+    caption = "Points closer to red diagonal indicate better predictions"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5, size = 10),
+    plot.caption = element_text(hjust = 0.5, size = 9, color = "gray40"),
+    strip.text = element_text(face = "bold", size = 11)
+  )
+```
+Box Plot of Prediction Errors
+```{r}
+#calc errors based on actual minus prediction
+errors <- data.frame(
+  Error = c(test2$POVPIP - pred1,
+            test2$POVPIP - pred2,
+            test2$POVPIP - pred3,
+            test2$POVPIP - pred4),
+  Model = rep(c("LM1: All Variables", 
+                "LM2: Edu + Disability", 
+                "LM3: + Work Hours", 
+                "LM4: + Geography"), 
+              each = length(pred1))
+)
+
+#create box plot
+ggplot(errors, aes(x = Model, y = Error, fill = Model)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red", size = 1) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Prediction Error Distribution by Model (Test Set)",
+    subtitle = "Smaller box = better predictions | Red line = perfect predictions (zero error)",
+    y = "Prediction Error (Actual - Predicted)",
+    x = ""
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5, size = 11),
+    legend.position = "none",
+    axis.text.x = element_text(angle = 15, hjust = 1, face = "bold")
+  )
+```
+Bar Charge for RMSE comparison
+
+```{r fig.width=10, fig.height=6}
+ggplot(regression_comparison, aes(x = reorder(Model, RMSE), y = RMSE, fill = Model)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = round(RMSE, 1)), 
+            vjust = 2, fontface = "bold", size = 6, color = "white") +  # Changed!
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Model Performance Comparison: RMSE (Test Set)",
+    subtitle = "Lower RMSE = Better Predictions",
+    y = "Root Mean Squared Error (RMSE)",
+    x = ""
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 12),
+    plot.subtitle = element_text(hjust = 0.5, size = 10),
+    legend.position = "none",
+    axis.text.x = element_text(angle = 15, hjust = 1, face = "bold", size = 11),
+    axis.text.y = element_text(size = 11)
+  )
+```
+
+
+
+```{r}
+# Identify best models by each criterion
+cat("\n\nModel Selection Summary:\n")
+cat("------------------------\n")
+cat("Best model by RMSE (lower is better): ", 
+    regression_comparison$Model[which.min(regression_comparison$RMSE)], "\n")
+cat("Best model by R² (higher is better):  ", 
+    regression_comparison$Model[which.max(regression_comparison$Rsquared)], "\n")
+cat("Best model by MAE (lower is better):  ", 
+    regression_comparison$Model[which.min(regression_comparison$MAE)], "\n")
+
+# Highlight best overall model
+best_idx <- which.min(regression_comparison$RMSE)
+cat("\nRecommended Model:", regression_comparison$Model[best_idx], "\n")
+cat("  RMSE:      ", round(regression_comparison$RMSE[best_idx], 3), "\n")
+cat("  R-squared: ", round(regression_comparison$Rsquared[best_idx], 3), "\n")
+cat("  MAE:       ", round(regression_comparison$MAE[best_idx], 3), "\n")
 ```
 
