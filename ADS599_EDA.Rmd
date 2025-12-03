@@ -34,12 +34,12 @@ library(tidycensus)
 ## Reading in the data 
 
 ```{r setup, include=FALSE}
-pums_data <- readr::read_csv(here::here("pums_data.csv"))
+pums_data <- readr::read_csv('/Users/mtc/ADS/ADS 599/untitled folder/pums_data.csv')
 
-county<- readr::read_csv(here::here("Ruralurbancontinuumcodes2023.csv")) %>%
+county<- readr::read_csv('/Users/mtc/ADS/ADS 599/untitled folder/Ruralurbancontinuumcodes2023.csv') %>%
   filter(Attribute == 'RUCC_2023' & State == 'IL')
 
-puma<- readr::read_csv(here::here("2020_Census_Tract_to_2020_PUMA.txt"))
+puma<- readr::read_csv("/Users/mtc/ADS/ADS 599/untitled folder/2020_Census_Tract_to_2020_PUMA.txt")
 ```
 
 ## Adjusting indicator variables so that No = 0 and Yes = 1
@@ -57,14 +57,13 @@ for(label in bin_fix){
 
 ```{r}
 pums_data_col<- pums_data %>%
-  mutate(SCHL = as.factor(SCHL)) %>%
-  mutate(edu_cat = fct_collapse(SCHL, up_to_grade= c('01', '02', '03', '04', '05', '06', '07', '08'),
-                                middle = c('09', '10', '11'),
-                                some_hs = c('12', '13', '14', '15'),
-                                hs_dip_equiv = c('16', '17'),
-                                some_coll = c('18', '19'),
-                                assoc_bach = c('20', '21'),
-                                masters_pl = c('22', '23', '24')),
+  mutate(edu_cat = case_when(SCHL == '01' | SCHL =='02' | SCHL =='03'| SCHL =='04'| SCHL =='05'| SCHL =='06'| SCHL =='07'| SCHL =='08' ~1,
+                                SCHL == '09'| SCHL =='10'| SCHL =='11'~2,
+                                SCHL == '12'| SCHL =='13'| SCHL =='14'| SCHL =='15'~3,
+                                SCHL == '16'| SCHL =='17'~4,
+                                SCHL == '18'| SCHL =='19'~5,
+                                SCHL == '20'| SCHL =='21'~6,
+                                SCHL == '22'| SCHL =='23'| SCHL =='24'~7),
          COW_desc = case_when(COW == 1 ~ "for_profit_or_ind",
                               COW == 2 ~ "not_profit",
                               COW == 3 ~ "local_gov",
@@ -341,7 +340,7 @@ disabled %>%
 
 ```{r}
 pums_data_col %>%
-  select(AGEP, DDRS, DEAR, DEYE, DOUT, DPHY, DREM, SSIP, SSP, WAGP, PINCP, tract_in, POVPIP) %>%
+  select(AGEP, DDRS, DEAR, DEYE, DOUT, DPHY, DREM, SSIP, SSP, WAGP, PINCP, tract_in, edu_cat, POVPIP) %>%
   cor() %>%
   corrplot(diag = FALSE, type = 'upper')
 ```
