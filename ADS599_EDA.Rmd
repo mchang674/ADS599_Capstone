@@ -34,12 +34,12 @@ library(tidycensus)
 ## Reading in the data 
 
 ```{r setup, include=FALSE}
-pums_data <- readr::read_csv('/Users/mtc/ADS/ADS 599/untitled folder/pums_data.csv')
+pums_data <- readr::read_csv('/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
 
-county<- readr::read_csv('/Users/mtc/ADS/ADS 599/untitled folder/Ruralurbancontinuumcodes2023.csv') %>%
+county<- readr::read_csv('/Users/mtc/ADS/ADS 599/599 Project/Ruralurbancontinuumcodes2023.csv') %>%
   filter(Attribute == 'RUCC_2023' & State == 'IL')
 
-puma<- readr::read_csv("/Users/mtc/ADS/ADS 599/untitled folder/2020_Census_Tract_to_2020_PUMA.txt")
+puma<- readr::read_csv("/Users/mtc/ADS/ADS 599/599 Project/2020_Census_Tract_to_2020_PUMA.txt")
 ```
 
 ## Adjusting indicator variables so that No = 0 and Yes = 1
