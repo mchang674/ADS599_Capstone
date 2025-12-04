@@ -337,7 +337,8 @@ LDA model has the best balanced accuracy.
 
 ```{r}
 near_to_pov<- model_data %>%
-  select(!pov_ind)
+  select(!pov_ind) %>%
+  mutate(edu_cat = as.factor(edu_cat))
 
 trainingRows2<- createDataPartition(near_to_pov$POVPIP, p = .75, list = FALSE) 
 train2<-  near_to_pov[trainingRows2, ]
@@ -349,28 +350,34 @@ test2 <- near_to_pov[-trainingRows2, ]
 
 ```{r}
 # all variables
-lm1<- lm(POVPIP ~ ., data = train2[,2:37], weights = train2$PWGTP)
+lm1<- lm(POVPIP ~ . , data = train2[,2:37], weights = train2$PWGTP)
 summary(lm1)
 
 # educational attainment with disability interactions
-lm2<- lm(POVPIP ~ edu_cat + edu_cat*dis, data = train2, weights = PWGTP)
+lm2<- lm(POVPIP ~ edu_cat + dis + edu_cat:dis, data = train2, weights = PWGTP)
 summary(lm2)
 
 # educational attainment with disability interactions and standard hours worked per week
-lm3<- lm(POVPIP ~ edu_cat + edu_cat*dis + WKHP, data = train2, weights = PWGTP)
+lm3<- lm(POVPIP ~ edu_cat + dis + WKHP, data = train2, weights = PWGTP)
 summary(lm3)
 
 # educational attainment with disability, standard hours worked per week, and geographical information
-lm4<- lm(POVPIP ~ age + edu_cat + tract_in + edu_cat*dis + tract_in*dis, data = train2, weights = PWGTP)
+lm4<- lm(POVPIP ~ age + edu_cat + tract_in + dis + tract_in:dis, data = train2, weights = PWGTP)
 summary(lm4)
 ```
 
 ```{r}
 test2_Results <- data.frame(
   obs = test2$POVPIP,
-  lm = predict(lm1, test2[, 3:37])
+  lm1 = predict(lm1, test2[, 3:37]),
+  lm2 = predict(lm2, test2[, 3:37]),
+  lm3 = predict(lm3, test2[, 3:37]),
+  lm4 = predict(lm4, test2[, 3:37])
 )
 
-RMSE(test2_Results$obs, test2_Results$lm)
+RMSE(test2_Results$obs, test2_Results$lm1)
+RMSE(test2_Results$obs, test2_Results$lm2)
+RMSE(test2_Results$obs, test2_Results$lm3)
+RMSE(test2_Results$obs, test2_Results$lm4)
 ```
 
