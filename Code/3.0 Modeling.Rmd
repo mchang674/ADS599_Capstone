@@ -28,12 +28,14 @@ library(kernlab)
 library(here)
 library(pROC)
 library(randomForest)
+library(httr)
 
 library(tidycensus)
 ```
 
 ```{r setup, include=FALSE}
-model_data <- readr::read_csv('/Users/mtc/ADS/ADS 599/599 Project/model_data.csv')
+git_model_data<- GET('https://raw.githubusercontent.com/mchang674/ADS599_Capstone/refs/heads/main/Data%20Files/model_data.csv')
+model_data <- readr::read_csv(git_model_data)
 
 model_data<- model_data %>%
   mutate(pov_ind = as.factor(pov_ind)) %>%

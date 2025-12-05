@@ -35,11 +35,13 @@ library(tidycensus)
 ## Reading in the data 
 
 ```{r setup, include=FALSE}
-pums_data <- readr::read_csv('/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
+git_pums_data <- GET('https://raw.githubusercontent.com/mchang674/ADS599_Capstone/refs/heads/main/Data%20Files/pums_data.csv') 
 
-#puma_data<- GET('https://raw.githubusercontent.com/mchang674/ADS599_Capstone/refs/heads/main/2020_Census_Tract_to_2020_PUMA.txt')
+git_puma_data<- GET('https://raw.githubusercontent.com/mchang674/ADS599_Capstone/refs/heads/main/Data%20Files/2020_Census_Tract_to_2020_PUMA.txt')
 
-puma<- readr::read_csv("/Users/mtc/ADS/ADS 599/599 Project/2020_Census_Tract_to_2020_PUMA.txt")
+
+pums_data<- readr::read_csv(git_pums_data)
+puma<- readr::read_csv(git_puma_data)
 ```
 
 ## Adjusting indicator variables so that No = 0 and Yes = 1
