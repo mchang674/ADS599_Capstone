@@ -27,6 +27,7 @@ library(weights)
 library(Hmisc)
 library(corrplot)
 library(here)
+library(httr)
 
 library(tidycensus)
 ```
@@ -36,8 +37,7 @@ library(tidycensus)
 ```{r setup, include=FALSE}
 pums_data <- readr::read_csv('/Users/mtc/ADS/ADS 599/599 Project/pums_data.csv')
 
-county<- readr::read_csv('/Users/mtc/ADS/ADS 599/599 Project/Ruralurbancontinuumcodes2023.csv') %>%
-  filter(Attribute == 'RUCC_2023' & State == 'IL')
+#puma_data<- GET('https://raw.githubusercontent.com/mchang674/ADS599_Capstone/refs/heads/main/2020_Census_Tract_to_2020_PUMA.txt')
 
 puma<- readr::read_csv("/Users/mtc/ADS/ADS 599/599 Project/2020_Census_Tract_to_2020_PUMA.txt")
 ```
